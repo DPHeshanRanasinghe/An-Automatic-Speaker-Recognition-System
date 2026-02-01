@@ -3,6 +3,8 @@
 
 # Ignore all Jupyter Notebooks in this project
 *.ipynb
+# But do NOT ignore the MFCC notebook
+!MFCC/MFCC.ipynb
 
 # But keep README and other files
 !README.md
