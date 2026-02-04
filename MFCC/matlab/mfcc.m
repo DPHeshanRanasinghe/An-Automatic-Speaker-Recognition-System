@@ -91,6 +91,14 @@ nfft         = 512;     % FFT size (power of 2, >= frame_length)
 num_filters  = 26;      % Mel filterbank filters (20-40 typical)
 num_coeffs   = 13;      % MFCC coefficients to keep (12-13 standard)
 
+% NEW OPTIONS:
+drop_c0      = false;   % Set to true to drop the first coefficient (c0/energy)
+                        % c0 is loudness-dependent and may not carry
+                        % speaker-specific information. Some systems drop it.
+add_deltas   = false;   % Set to true to add delta and delta-delta features
+                        % This extends 13 MFCCs to 39 features (13+13+13)
+delta_N      = 2;       % Window size for delta computation (frames on each side)
+
 % =========================================================================
 % STEP 0.5: INPUT VALIDATION AND PREPROCESSING
 % =========================================================================
@@ -157,6 +165,29 @@ log_mel = apply_log(mel_energies);
 % Apply Discrete Cosine Transform and keep first num_coeffs
 % Output: (num_frames × num_coeffs) matrix by default
 coeffs = apply_dct(log_mel, num_coeffs);
+
+% =========================================================================
+% STEP 8.5: OPTIONAL - DROP C0 (ENERGY COEFFICIENT)
+% =========================================================================
+% The first coefficient (c0) is proportional to log-energy/loudness.
+% Some systems drop it because it's volume-dependent, not speaker-dependent.
+if drop_c0
+    coeffs = coeffs(:, 2:end);  % Remove first column (c0)
+    % Now we have (num_frames × num_coeffs-1)
+end
+
+% =========================================================================
+% STEP 9: OPTIONAL - ADD DELTA AND DELTA-DELTA FEATURES
+% =========================================================================
+% Delta features capture temporal dynamics (how MFCCs change over time).
+% Delta-delta features capture acceleration (second derivative).
+% Standard: 13 MFCC + 13 delta + 13 delta-delta = 39 features
+if add_deltas
+    delta_coeffs = compute_delta(coeffs, delta_N);       % First derivative
+    delta_delta_coeffs = compute_delta(delta_coeffs, delta_N);  % Second derivative
+    coeffs = [coeffs, delta_coeffs, delta_delta_coeffs];  % Concatenate
+    % Now we have (num_frames × 3*num_coeffs) or (num_frames × 3*(num_coeffs-1)) if drop_c0
+end
 
 % =========================================================================
 % TRANSPOSE (IF NEEDED)

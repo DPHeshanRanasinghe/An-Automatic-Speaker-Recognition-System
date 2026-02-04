@@ -91,6 +91,13 @@ for i = 1:num_frames
 end
 
 % =========================================================================
+% Power spectrum normalization (improves numerical stability)
+% =========================================================================
+% Normalize by 1/nfft to make power values more consistent across
+% different FFT sizes. This helps with numerical stability.
+power_spectrum = power_spectrum / nfft;
+
+% =========================================================================
 % DEBUGGING / VERIFICATION (uncomment to check)
 % =========================================================================
 % fprintf('Power spectrum computed:\n');

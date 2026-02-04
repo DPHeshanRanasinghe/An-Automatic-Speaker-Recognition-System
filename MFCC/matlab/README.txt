@@ -9,19 +9,27 @@ PACKAGE CONTENTS
 1. preemphasis.m          - Step 1: High-pass filter
 2. frame_signal.m         - Step 2: Divide into frames
 3. apply_window.m         - Step 3: Hamming windowing
-4. compute_power_spectrum.m - Steps 4&5: FFT + Power
+4. compute_power_spectrum.m - Steps 4&5: FFT + Power (with normalization)
 5. apply_mel_filterbank.m - Step 6: Mel filtering
 6. apply_log.m            - Step 7: Logarithm
 7. apply_dct.m            - Step 8: DCT
-8. mfcc.m                 - MAIN function (calls all 7 helpers)
-9. test_mfcc.m            - Test script with visualizations
+8. mfcc.m                 - MAIN function (calls all helpers)
+9. melfb.m                - Mel filterbank generator (triangular filters)
+10. compute_delta.m       - Delta/delta-delta feature computation
+11. test_mfcc.m           - Test script with visualizations
 
 QUICK START
 ===========
 1. Copy all .m files to your project directory
-2. Make sure you have melfb.m from your project
-3. Run: test_mfcc.m
-4. Check the visualizations to verify everything works
+2. Run: test_mfcc.m
+3. Check the visualizations to verify everything works
+
+NEW FEATURES
+============
+- Power spectrum normalization for better numerical stability
+- Configurable c0 dropping (set drop_c0 = true in mfcc.m)
+- Optional delta and delta-delta features (set add_deltas = true)
+- Full 39-dimensional feature vectors (13 MFCC + 13 delta + 13 delta-delta)
 
 STEP-BY-STEP GUIDE
 ==================
