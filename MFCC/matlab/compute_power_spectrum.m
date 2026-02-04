@@ -1,0 +1,177 @@
+function power_spectrum = compute_power_spectrum(windowed_frames, nfft)
+% COMPUTE_POWER_SPECTRUM - Compute power spectrum for each frame
+%
+% This combines Steps 4 & 5 of the MFCC pipeline:
+% - Step 4: Apply FFT to convert time → frequency domain
+% - Step 5: Compute power spectrum (squared magnitude)
+%
+% INPUTS:
+%   windowed_frames - matrix where each ROW is one windowed frame
+%                     Size: (num_frames × frame_length)
+%   nfft            - FFT size (typically 512)
+%                     Must be ≥ frame_length
+%                     Power-of-2 values are fastest (256, 512, 1024, ...)
+%
+% OUTPUT:
+%   power_spectrum - power spectrum for each frame
+%                    Size: (num_frames × (nfft/2 + 1))
+%                    Only positive frequencies are kept
+%
+% MATH:
+%   FFT: X[k] = Σ(n=0 to N-1) x[n] * exp(-j*2π*k*n/N)
+%   Power: P[k] = |X[k]|² = Re(X[k])² + Im(X[k])²
+%   Frequency of bin k: f[k] = k * fs / nfft
+%
+% USAGE:
+%   power = compute_power_spectrum(windowed_frames, 512);
+%
+% EXAMPLE:
+%   [audio, fs] = audioread('speech.wav');
+%   emp = preemphasis(audio);
+%   frames = frame_signal(emp, 256, 100);
+%   windowed = apply_window(frames);
+%   power = compute_power_spectrum(windowed, 512);
+%   
+%   fprintf('Power spectrum size: %d frames × %d freq bins\n', ...
+%           size(power,1), size(power,2));
+%   
+%   % Visualize as spectrogram
+%   figure;
+%   imagesc(10*log10(power' + eps)); axis xy;
+%   colorbar; colormap('jet');
+%   xlabel('Frame'); ylabel('Frequency Bin');
+%   title('Power Spectrogram (dB)');
+
+% =========================================================================
+% Get dimensions
+% =========================================================================
+[num_frames, frame_length] = size(windowed_frames);
+
+% =========================================================================
+% Input validation
+% =========================================================================
+if nfft < frame_length
+    error('NFFT (%d) must be >= frame_length (%d)', nfft, frame_length);
+end
+
+% Check if nfft is power of 2 (not required, but gives a warning if not)
+if ~(nfft > 0 && mod(log2(nfft), 1) == 0)
+    warning('NFFT=%d is not a power of 2. FFT will be slower.', nfft);
+end
+
+% =========================================================================
+% Calculate number of frequency bins
+% =========================================================================
+% For real-valued input, FFT output is symmetric:
+% X[N-k] = conj(X[k])
+% So we only need the first half plus DC and Nyquist
+num_bins = nfft/2 + 1;  % e.g., for nfft=512 → 257 bins
+
+% =========================================================================
+% Pre-allocate output
+% =========================================================================
+power_spectrum = zeros(num_frames, num_bins);
+
+% =========================================================================
+% Compute FFT and power spectrum for each frame
+% =========================================================================
+for i = 1:num_frames
+    % Take FFT of this frame
+    % If frame_length < nfft, MATLAB automatically zero-pads
+    fft_result = fft(windowed_frames(i, :), nfft);
+    
+    % Keep only positive frequencies (bins 1 to nfft/2+1)
+    fft_positive = fft_result(1:num_bins);
+    
+    % Compute power spectrum: |X|² = X * conj(X)
+    power_spectrum(i, :) = abs(fft_positive).^2;
+    
+    % Alternative (equivalent but slightly slower):
+    % power_spectrum(i, :) = real(fft_positive).^2 + imag(fft_positive).^2;
+end
+
+% =========================================================================
+% DEBUGGING / VERIFICATION (uncomment to check)
+% =========================================================================
+% fprintf('Power spectrum computed:\n');
+% fprintf('  Num frames:     %d\n', num_frames);
+% fprintf('  Frame length:   %d samples\n', frame_length);
+% fprintf('  NFFT:           %d\n', nfft);
+% fprintf('  Zero padding:   %d samples\n', nfft - frame_length);
+% fprintf('  Num freq bins:  %d (DC to Nyquist)\n', num_bins);
+% fprintf('  Freq resolution: %.2f Hz (at fs=16kHz)\n', 16000/nfft);
+% fprintf('  Output size:    %d × %d\n', size(power_spectrum,1), size(power_spectrum,2));
+% fprintf('  Power range:    [%.2e, %.2e]\n', min(power_spectrum(:)), max(power_spectrum(:)));
+
+end
+
+% =========================================================================
+% TECHNICAL NOTES:
+% =========================================================================
+% 1. Why FFT?
+%    The Discrete Fourier Transform (DFT) decomposes a time-domain signal
+%    into its frequency components. The Fast Fourier Transform (FFT) is
+%    an algorithm that computes the DFT efficiently in O(N log N) time
+%    instead of O(N²). For N=512: FFT takes ~4500 operations vs
+%    ~262,000 for direct DFT computation.
+%
+% 2. Zero-padding (nfft > frame_length):
+%    If we use nfft=512 with frame_length=256, MATLAB automatically
+%    appends 256 zeros before computing the FFT. This does NOT add
+%    new information, but it interpolates the frequency spectrum,
+%    giving finer frequency resolution (more bins between peaks).
+%    
+%    Frequency resolution = fs / nfft
+%    With nfft=256: Δf = 16000/256 = 62.5 Hz
+%    With nfft=512: Δf = 16000/512 = 31.25 Hz
+%    
+%    Common practice: nfft = 2 × frame_length
+%
+% 3. Why only positive frequencies?
+%    For a real-valued input signal x[n], the DFT satisfies:
+%       X[N-k] = conj(X[k])  (conjugate symmetry)
+%    
+%    This means:
+%    - Bins 1 to N/2 contain positive frequencies (0 to fs/2)
+%    - Bins N/2+1 to N contain negative frequencies (−fs/2 to 0)
+%    - The negative frequencies are mirror images of positive ones
+%    
+%    We only keep bins 1 to N/2+1:
+%    - Bin 1: DC component (0 Hz)
+%    - Bins 2 to N/2: positive frequencies
+%    - Bin N/2+1: Nyquist frequency (fs/2)
+%    
+%    The power spectrum is real and symmetric, so the second half
+%    would be redundant.
+%
+% 4. Power vs magnitude spectrum:
+%    - Magnitude spectrum: |X[k]| = sqrt(Re² + Im²)
+%    - Power spectrum:     |X[k]|² = Re² + Im²
+%    
+%    We use power because:
+%    (a) It matches the physical definition of signal power
+%    (b) It has better statistical properties (less noise sensitivity)
+%    (c) Saves a sqrt() computation
+%    (d) The log in the next step would undo the sqrt anyway:
+%        log(sqrt(x)) = 0.5*log(x), which is just a scale factor
+%
+% 5. Parseval's Theorem:
+%    The total energy in the time domain equals the total energy in
+%    the frequency domain (up to a scale factor):
+%       Σ |x[n]|² = (1/N) * Σ |X[k]|²
+%    
+%    This is useful for verification — the sum of power_spectrum
+%    should approximately equal the sum of windowed_frames.^2.
+%
+% 6. Frequency bin mapping:
+%    Bin index k corresponds to frequency:
+%       f[k] = k * fs / nfft,  k = 0, 1, ..., nfft/2
+%    
+%    For fs=16kHz, nfft=512:
+%       Bin 0:   0 Hz (DC)
+%       Bin 1:   31.25 Hz
+%       Bin 2:   62.5 Hz
+%       ...
+%       Bin 256: 8000 Hz (Nyquist)
+%
+% =========================================================================
