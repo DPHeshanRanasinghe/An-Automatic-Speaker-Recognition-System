@@ -76,7 +76,19 @@ function coeffs = mfcc(signal, fs)
 %     If your melfb.m is different, edit apply_mel_filterbank.m
 
 % =========================================================================
-% STEP 0: CONFIGURE PARAMETERS
+% STEP 0: INPUT VALIDATION
+% =========================================================================
+if nargin < 2
+    error('MFCC:NotEnoughInputs', ...
+          ['MFCC requires 2 input arguments: mfcc(signal, fs)\n\n' ...
+           'USAGE:\n' ...
+           '  [audio, fs] = audioread(''speech.wav'');\n' ...
+           '  coeffs = mfcc(audio, fs);\n\n' ...
+           'Type ''help mfcc'' for more information.']);
+end
+
+% =========================================================================
+% STEP 0.5: CONFIGURE PARAMETERS
 % =========================================================================
 % These are the standard values. Adjust if your project requires different settings.
 
