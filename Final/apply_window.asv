@@ -2,15 +2,67 @@ function windowed_frames = apply_window(frames)
 
 %   Hamming window: w[n] = 0.54 - 0.46 * cos(2πn/(N-1))
 %   Applied element-wise: windowed_frame[n] = frame[n] * w[n]
+%
+% USAGE:
+%   windowed = apply_window(frames);
+%
+% EXAMPLE:
+%   frames = frame_signal(signal, 256, 100);
+%   windowed = apply_window(frames);
+%   
+%   % Compare one frame before/after windowing
+%   figure;
+%   subplot(2,1,1); plot(frames(10,:)); title('Before Windowing');
+%   subplot(2,1,2); plot(windowed(10,:)); title('After Hamming Window');
+%   % Notice the edges taper to zero smoothly
+%   
+%   % Compare spectra
+%   figure;
+%   subplot(2,1,1); 
+%   [pxx,f] = pwelch(frames(10,:), [], [], [], 16000);
+%   plot(f, 10*log10(pxx)); title('Spectrum: No Window');
+%   subplot(2,1,2);
+%   [pxx,f] = pwelch(windowed(10,:), [], [], [], 16000);
+%   plot(f, 10*log10(pxx)); title('Spectrum: Hamming Window');
+%   % Notice reduced side lobes!
 
+% =========================================================================
+% Get dimensions
+% =========================================================================
 [num_frames, frame_length] = size(frames);
 
+% =========================================================================
+% Create Hamming window
+% =========================================================================
+% IMPORTANT: Use 'periodic' flag for DFT/FFT analysis
 % 'periodic' creates a window of length N suitable for N-point DFT
+% 'symmetric' (default) creates a window for FIR filter design
 window = hamming(frame_length, 'periodic');
 % window is a column vector of length frame_length
 
+% =========================================================================
+% Apply window to all frames
+% =========================================================================
+% We need to multiply each row of frames by the window
+% The window is a column vector, so we transpose it to a row
+
+% Method 1: Using bsxfun (works in all MATLAB versions)
 windowed_frames = bsxfun(@times, frames, window');
 
+% Method 2: Implicit expansion (MATLAB R2016b and later)
+% Uncomment this if you have a newer MATLAB version:
+% windowed_frames = frames .* window';
+
+% Method 3: Explicit loop (slowest but clearest)
+% Uncomment to see exactly what's happening:
+% windowed_frames = zeros(size(frames));
+% for i = 1:num_frames
+%     windowed_frames(i, :) = frames(i, :) .* window';
+% end
+
+% =========================================================================
+% DEBUGGING / VERIFICATION (uncomment to check)
+% =========================================================================
 % fprintf('Windowing applied:\n');
 % fprintf('  Num frames:     %d\n', num_frames);
 % fprintf('  Frame length:   %d\n', frame_length);
@@ -21,7 +73,9 @@ windowed_frames = bsxfun(@times, frames, window');
 
 end
 
+% =========================================================================
 % TECHNICAL NOTES:
+% =========================================================================
 % 1. Why Hamming window?
 %    The Hamming window has excellent side-lobe suppression (−43 dB).
 %    This means that spectral leakage from strong frequency components
@@ -71,4 +125,5 @@ end
 %    
 %    This trade-off is acceptable for speech because the frequency
 %    resolution loss is small and the spectral leakage reduction is huge.
-
+%
+% =========================================================================

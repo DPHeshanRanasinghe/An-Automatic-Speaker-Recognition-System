@@ -1,58 +1,8 @@
 function mfcc_coeffs = apply_dct(log_mel, num_coeffs)
-% APPLY_DCT - Apply Discrete Cosine Transform and keep first coefficients
-%
-% This is Step 8 (final step) of the MFCC pipeline. The DCT decorrelates
-% the log-mel energies and compresses them into a small number of coefficients
-% that capture the spectral envelope.
-%
-% INPUTS:
-%   log_mel     - log mel energies (num_frames × num_filters)
-%   num_coeffs  - number of MFCC coefficients to keep (typically 12-13)
-%
-% OUTPUT:
-%   mfcc_coeffs - MFCC coefficients (num_frames × num_coeffs)
-%
-% MATH:
-%   DCT Type-II:
-%   C[n] = Σ(k=0 to K-1) E[k] * cos(π*n*(2k+1) / (2K))
-%   
-%   where E[k] are the log-mel energies for one frame,
-%         C[n] are the DCT coefficients,
-%         K = number of filters
-%
-% USAGE:
-%   mfcc = apply_dct(log_mel, 13);
-%
-% EXAMPLE:
-%   log_mel = apply_log(mel_energies);
-%   mfcc = apply_dct(log_mel, 13);
-%   
-%   fprintf('MFCC size: %d frames × %d coefficients\n', ...
-%           size(mfcc,1), size(mfcc,2));
-%   
-%   % Visualize MFCC
-%   figure;
-%   imagesc(mfcc'); axis xy; colorbar; colormap('jet');
-%   xlabel('Frame'); ylabel('MFCC Coefficient');
-%   title('MFCC Features');
-%   
-%   % Plot individual coefficients over time
-%   figure;
-%   for i = 1:min(13, size(mfcc,2))
-%       subplot(4,4,i);
-%       plot(mfcc(:,i));
-%       title(sprintf('c_%d', i-1));  % 0-indexed in literature
-%       grid on;
-%   end
 
-% =========================================================================
-% Get dimensions
-% =========================================================================
 [num_frames, num_filters] = size(log_mel);
 
-% =========================================================================
 % Validate num_coeffs
-% =========================================================================
 if num_coeffs < 1
     error('num_coeffs must be >= 1');
 end
@@ -62,18 +12,9 @@ if num_coeffs > num_filters
           num_coeffs, num_filters);
 end
 
-% =========================================================================
-% Apply DCT
-% =========================================================================
-% MATLAB's dct() function operates on COLUMNS by default
-% Our log_mel is (num_frames × num_filters), so each ROW is one frame
-% We need to transpose so that each filter becomes a column
-
-% Transpose: (num_frames × num_filters) → (num_filters × num_frames)
 log_mel_T = log_mel';
 
 % Apply DCT to each column (i.e., to each frame)
-% Result: (num_filters × num_frames)
 dct_result = dct(log_mel_T);
 
 % Keep only the first num_coeffs rows
@@ -83,17 +24,6 @@ dct_coeffs = dct_result(1:num_coeffs, :);
 % Transpose back to get (num_frames × num_coeffs)
 mfcc_coeffs = dct_coeffs';
 
-% =========================================================================
-% ALTERNATIVE: If you want (num_coeffs × num_frames) output
-% =========================================================================
-% Some implementations return MFCC with coefficients as COLUMNS.
-% If your train.m expects that, comment out the transpose above:
-%
-% mfcc_coeffs = dct_coeffs;  % Keep as (num_coeffs × num_frames)
-
-% =========================================================================
-% DEBUGGING / VERIFICATION (uncomment to check)
-% =========================================================================
 % fprintf('DCT applied:\n');
 % fprintf('  Input size:     %d frames × %d filters\n', num_frames, num_filters);
 % fprintf('  Num coeffs:     %d\n', num_coeffs);
@@ -101,20 +31,10 @@ mfcc_coeffs = dct_coeffs';
 % fprintf('  MFCC range:     [%.2f, %.2f]\n', min(mfcc_coeffs(:)), max(mfcc_coeffs(:)));
 % fprintf('  MFCC mean:      %.4f\n', mean(mfcc_coeffs(:)));
 % fprintf('  MFCC std:       %.4f\n', std(mfcc_coeffs(:)));
-% 
-% % Check for problematic values
-% if any(isinf(mfcc_coeffs(:)))
-%     warning('%d Inf values in MFCC!', sum(isinf(mfcc_coeffs(:))));
-% end
-% if any(isnan(mfcc_coeffs(:)))
-%     warning('%d NaN values in MFCC!', sum(isnan(mfcc_coeffs(:))));
-% end
 
 end
 
-% =========================================================================
 % TECHNICAL NOTES:
-% =========================================================================
 % 1. What is the DCT?
 %    The Discrete Cosine Transform is similar to the DFT, but uses only
 %    cosine basis functions (no complex exponentials). For real-valued,
@@ -227,5 +147,4 @@ end
 %     (a) Real-valued (no complex arithmetic needed)
 %     (b) Good energy compaction (most energy in first few coeffs)
 %     (c) Fast computation (same O(N log N) as FFT)
-%
-% =========================================================================
+

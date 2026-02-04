@@ -59,30 +59,33 @@ end
 fprintf('  ✓ Audio loaded successfully\n\n');
 
 % =========================================================================
-% STEP 2: EXTRACT MFCC
+% STEP 2: EXTRACT 39-DIMENSIONAL MFCC FEATURES
 % =========================================================================
-fprintf('STEP 2: Extracting MFCC features...\n');
+fprintf('STEP 2: Extracting 39-dimensional MFCC features...\n\n');
 
 tic;  % Start timer
-coeffs = mfcc(signal, fs);
+[features, mfcc_coeffs, delta_coeffs, delta2_coeffs] = mfcc(signal, fs, true);
 elapsed = toc;  % End timer
 
-fprintf('  Computation time: %.4f seconds\n', elapsed);
-fprintf('  Output size: %d × %d\n', size(coeffs, 1), size(coeffs, 2));
-fprintf('  ✓ MFCC extraction complete\n\n');
+fprintf('\n  Computation time: %.4f seconds\n', elapsed);
+fprintf('  ✓ Feature extraction complete\n\n');
 
 % =========================================================================
 % STEP 3: BASIC STATISTICS
 % =========================================================================
 fprintf('STEP 3: Checking statistics...\n');
 
-fprintf('  MFCC range: [%.2f, %.2f]\n', min(coeffs(:)), max(coeffs(:)));
-fprintf('  MFCC mean: %.4f\n', mean(coeffs(:)));
-fprintf('  MFCC std: %.4f\n', std(coeffs(:)));
+fprintf('  All features range: [%.2f, %.2f]\n', min(features(:)), max(features(:)));
+fprintf('  All features mean: %.4f\n', mean(features(:)));
+fprintf('  All features std: %.4f\n\n', std(features(:)));
+
+fprintf('  MFCC range: [%.2f, %.2f]\n', min(mfcc_coeffs(:)), max(mfcc_coeffs(:)));
+fprintf('  Delta range: [%.2f, %.2f]\n', min(delta_coeffs(:)), max(delta_coeffs(:)));
+fprintf('  Delta-Delta range: [%.2f, %.2f]\n', min(delta2_coeffs(:)), max(delta2_coeffs(:)));
 
 % Check for problematic values
-num_nan = sum(isnan(coeffs(:)));
-num_inf = sum(isinf(coeffs(:)));
+num_nan = sum(isnan(features(:)));
+num_inf = sum(isinf(features(:)));
 
 if num_nan > 0
     fprintf('  ⚠ WARNING: %d NaN values detected!\n', num_nan);
@@ -99,8 +102,8 @@ else
 end
 
 % Typical MFCC values are in range [−50, 50] or so
-if min(coeffs(:)) < -100 || max(coeffs(:)) > 100
-    fprintf('  ⚠ WARNING: MFCC values outside typical range\n');
+if min(features(:)) < -100 || max(features(:)) > 100
+    fprintf('  ⚠ WARNING: Feature values outside typical range\n');
     fprintf('    → Typical range is roughly [−50, 50]\n');
     fprintf('    → Check log step\n');
 else
@@ -110,75 +113,114 @@ end
 fprintf('\n');
 
 % =========================================================================
-% STEP 4: VISUALIZATIONS
+% STEP 4: VISUALIZATIONS - 39-DIMENSIONAL FEATURES
 % =========================================================================
 fprintf('STEP 4: Creating visualizations...\n');
 
-% Figure 1: MFCC Heatmap
-figure('Name', 'MFCC Features', 'Position', [100 100 800 500]);
-imagesc(coeffs');
-axis xy;
-colorbar;
-colormap('jet');
-xlabel('Frame Number', 'FontSize', 12);
-ylabel('MFCC Coefficient', 'FontSize', 12);
-title(sprintf('MFCC Features: %s', audio_file), 'FontSize', 14, 'Interpreter', 'none');
+% Figure 1: All 39 Features Heatmap
+figure('Name', '39-Dimensional MFCC Features', 'Position', [100 100 1200 600]);
 
-% Add grid
+subplot(2,2,1);
+imagesc(mfcc_coeffs');
+axis xy; colorbar; colormap('jet');
+title('MFCC Coefficients (13)');
+xlabel('Frame'); ylabel('Coefficient');
+
+subplot(2,2,2);
+imagesc(delta_coeffs');
+axis xy; colorbar; colormap('jet');
+title('Delta Coefficients (13)');
+xlabel('Frame'); ylabel('Coefficient');
+
+subplot(2,2,3);
+imagesc(delta2_coeffs');
+axis xy; colorbar; colormap('jet');
+title('Delta-Delta Coefficients (13)');
+xlabel('Frame'); ylabel('Coefficient');
+
+subplot(2,2,4);
+% Normalize each section for better visualization
+features_norm = features;
+features_norm(:,1:13) = (features(:,1:13) - min(features(:,1:13),[],1)) ./ (max(features(:,1:13),[],1) - min(features(:,1:13),[],1));
+features_norm(:,14:26) = (features(:,14:26) - min(features(:,14:26),[],1)) ./ (max(features(:,14:26),[],1) - min(features(:,14:26),[],1));
+features_norm(:,27:39) = (features(:,27:39) - min(features(:,27:39),[],1)) ./ (max(features(:,27:39),[],1) - min(features(:,27:39),[],1));
+
+imagesc(features_norm');
+axis xy; colorbar; colormap('jet');
+title('All 39 Features (Normalized per Section)');
+xlabel('Frame'); ylabel('Feature Dimension');
 hold on;
-% Vertical grid lines every 10 frames
-for i = 10:10:size(coeffs,1)
-    plot([i i], [0.5 size(coeffs,2)+0.5], 'w--', 'LineWidth', 0.5);
-end
-% Horizontal grid lines between coefficients
-for i = 1.5:1:size(coeffs,2)
-    plot([0.5 size(coeffs,1)+0.5], [i i], 'w--', 'LineWidth', 0.5);
-end
+plot([0.5 size(features,1)+0.5], [13.5 13.5], 'w--', 'LineWidth', 2);
+plot([0.5 size(features,1)+0.5], [26.5 26.5], 'w--', 'LineWidth', 2);
+text(5, 7, 'MFCC', 'Color', 'white', 'FontWeight', 'bold', 'FontSize', 10);
+text(5, 20, 'Delta', 'Color', 'white', 'FontWeight', 'bold', 'FontSize', 10);
+text(5, 33, 'Δ-Δ', 'Color', 'white', 'FontWeight', 'bold', 'FontSize', 10);
 hold off;
 
-fprintf('  ✓ Created MFCC heatmap\n');
+sgtitle(sprintf('39-Dimensional MFCC Features: %s', audio_file), 'FontSize', 14, 'Interpreter', 'none');
+fprintf('  ✓ Created 39-feature heatmap\n');
 
-% Figure 2: Individual MFCC Coefficients Over Time
-figure('Name', 'MFCC Coefficients Time Series', 'Position', [150 150 1000 700]);
-num_coeffs_to_plot = min(13, size(coeffs, 2));
+% Figure 2: Time Series Comparison - MFCC, Delta, Delta-Delta
+figure('Name', 'Coefficient Time Series Comparison', 'Position', [150 150 1400 800]);
 
-for i = 1:num_coeffs_to_plot
+for i = 1:min(12, size(mfcc_coeffs, 2))
     subplot(4, 4, i);
-    plot(coeffs(:, i), 'LineWidth', 1.5);
+    plot(mfcc_coeffs(:, i), 'b', 'LineWidth', 1.5);
+    hold on;
+    plot(delta_coeffs(:, i), 'r', 'LineWidth', 1);
+    plot(delta2_coeffs(:, i), 'g', 'LineWidth', 1);
+    hold off;
     grid on;
-    title(sprintf('c_{%d}', i-1), 'FontSize', 11);  % 0-indexed
+    title(sprintf('Coeff %d', i-1), 'FontSize', 10);
     xlabel('Frame');
     ylabel('Value');
+    if i == 1
+        legend('MFCC', 'Delta', 'Δ-Δ', 'Location', 'best', 'FontSize', 8);
+    end
 end
 
-sgtitle('MFCC Coefficients Over Time', 'FontSize', 14);
+% Last coefficient
+subplot(4, 4, 13);
+plot(mfcc_coeffs(:, 13), 'b', 'LineWidth', 1.5);
+hold on;
+plot(delta_coeffs(:, 13), 'r', 'LineWidth', 1);
+plot(delta2_coeffs(:, 13), 'g', 'LineWidth', 1);
+hold off;
+grid on;
+title('Coeff 12', 'FontSize', 10);
+xlabel('Frame');
+ylabel('Value');
+
+sgtitle('MFCC Coefficients Over Time (with Delta features)', 'FontSize', 14);
 fprintf('  ✓ Created coefficient time series\n');
 
-% Figure 3: MFCC Statistics per Coefficient
-figure('Name', 'MFCC Statistics', 'Position', [200 200 900 400]);
+% Figure 3: Feature Statistics
+figure('Name', 'Feature Statistics', 'Position', [200 200 1200 400]);
 
 subplot(1, 3, 1);
-bar(mean(coeffs, 1));
-grid on;
+bar([mean(mfcc_coeffs); mean(delta_coeffs); mean(delta2_coeffs)]');
+legend('MFCC', 'Delta', 'Δ-Δ', 'Location', 'best');
 title('Mean of Each Coefficient');
 xlabel('Coefficient Index');
 ylabel('Mean Value');
+grid on;
 
 subplot(1, 3, 2);
-bar(std(coeffs, 0, 1));
-grid on;
+bar([std(mfcc_coeffs); std(delta_coeffs); std(delta2_coeffs)]');
+legend('MFCC', 'Delta', 'Δ-Δ', 'Location', 'best');
 title('Std Dev of Each Coefficient');
 xlabel('Coefficient Index');
 ylabel('Std Dev');
+grid on;
 
 subplot(1, 3, 3);
-bar(range(coeffs, 1));
+boxplot([mfcc_coeffs(:,1:3), delta_coeffs(:,1:3), delta2_coeffs(:,1:3)], ...
+        'Labels', {'M0','M1','M2','D0','D1','D2','DD0','DD1','DD2'});
+title('Distribution of First 3 Coefficients');
+ylabel('Value');
 grid on;
-title('Range of Each Coefficient');
-xlabel('Coefficient Index');
-ylabel('Range (max − min)');
 
-sgtitle('MFCC Coefficient Statistics', 'FontSize', 14);
+sgtitle('Feature Statistics Comparison', 'FontSize', 14);
 fprintf('  ✓ Created statistics plots\n\n');
 
 % =========================================================================
@@ -286,8 +328,8 @@ xlabel('Frame'); ylabel('Mel Band');
 
 % Final MFCC
 subplot(4, 2, 8);
-imagesc(coeffs'); axis xy; colorbar;
-title('8. MFCC (Final Output)');
+imagesc(mfcc_coeffs'); axis xy; colorbar;
+title('8. MFCC Coefficients');
 xlabel('Frame'); ylabel('Coefficient');
 
 sgtitle('MFCC Pipeline: All Stages', 'FontSize', 14);
@@ -300,7 +342,11 @@ fprintf('==================================================\n');
 fprintf('                 TEST SUMMARY\n');
 fprintf('==================================================\n');
 fprintf('✓ Audio loaded: %s\n', audio_file);
-fprintf('✓ MFCC computed: %d frames × %d coeffs\n', size(coeffs,1), size(coeffs,2));
+fprintf('✓ Features computed:\n');
+fprintf('  - MFCC: %d frames × %d coeffs\n', size(mfcc_coeffs,1), size(mfcc_coeffs,2));
+fprintf('  - Delta: %d frames × %d coeffs\n', size(delta_coeffs,1), size(delta_coeffs,2));
+fprintf('  - Delta-Delta: %d frames × %d coeffs\n', size(delta2_coeffs,1), size(delta2_coeffs,2));
+fprintf('  - Combined: %d frames × %d features\n', size(features,1), size(features,2));
 fprintf('✓ Processing time: %.4f seconds\n', elapsed);
 fprintf('✓ All visualizations created\n');
 
@@ -310,7 +356,7 @@ else
     fprintf('⚠ WARNING: Found NaN (%d) or Inf (%d) values\n', num_nan, num_inf);
 end
 
-fprintf('\nYour MFCC implementation is ready to use!\n');
+fprintf('\nYour 39-dimensional MFCC implementation is ready!\n');
 fprintf('Next steps:\n');
 fprintf('  1. Run this test on all 8 training files\n');
 fprintf('  2. Implement vqlbg.m for vector quantization\n');
@@ -322,7 +368,7 @@ fprintf('==================================================\n\n');
 % =========================================================================
 % Uncomment to save MFCC features and figures
 
-% save('mfcc_test_results.mat', 'coeffs', 'signal', 'fs');
+% save('mfcc_test_results.mat', 'features', 'mfcc_coeffs', 'delta_coeffs', 'delta2_coeffs', 'signal', 'fs');
 % fprintf('Results saved to mfcc_test_results.mat\n');
 
 % saveas(gcf, 'mfcc_pipeline.png');
