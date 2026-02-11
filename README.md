@@ -73,24 +73,13 @@ An-Automatic-Speaker-Recognition-System/
 |
 |-- README.md                          <-- This file
 |
-|-- MFCC/                              <-- Phase 1: Learning and building MFCC
-|   |-- matlab/                        <-- From-scratch MATLAB implementation
-|   |   |-- preemphasis.m
-|   |   |-- frame_signal.m
-|   |   |-- apply_window.m
-|   |   |-- compute_power_spectrum.m
-|   |   |-- apply_mel_filterbank.m
-|   |   |-- apply_log.m
-|   |   |-- apply_dct.m
-|   |   |-- compute_delta.m
-|   |   |-- mfcc.m                     <-- Wrapper: full pipeline in one call
-|   |   |-- melfb.m                    <-- Mel filterbank matrix generator
-|   |   |-- test_mfcc.m                <-- Test script with visualizations
-|   |   +-- README.txt                 <-- Detailed function documentation
+|-- MFCC/                              <-- Learning materials and theory exploration
+|   |-- matlab/                        <-- (Excluded from git - early prototypes)
 |   |-- MFCC.ipynb                     <-- Python MFCC exploration notebook
 |   |-- Learn_MFCC.ipynb               <-- Theory and derivation notebook
 |   |-- ComputeMelfrequencyCepstralCoefficientsExample.mlx
-|   +-- ExtractMFCCFromFrequencyDomainAudioExample.mlx
+|   |-- ExtractMFCCFromFrequencyDomainAudioExample.mlx
+|   +-- Reference PDFs                 <-- Technical documentation
 |
 |-- Final/                             <-- Phase 2-4: Complete recognition system
 |   |-- data/
@@ -105,17 +94,17 @@ An-Automatic-Speaker-Recognition-System/
 |   |-- trained_models/
 |   |   +-- gmm_ubm_model.pkl          <-- Serialized UBM + speaker GMMs + scaler
 |   |
-|   |-- MATLAB source files (same pipeline as MFCC/matlab/)
-|   |   |-- preemphasis.m
-|   |   |-- frame_signal.m
-|   |   |-- apply_window.m
-|   |   |-- compute_power_spectrum.m
-|   |   |-- apply_mel_filterbank.m
-|   |   |-- apply_log.m
-|   |   |-- apply_dct.m
-|   |   |-- compute_delta.m
-|   |   |-- mfcc.m
-|   |   +-- melfb.m
+|   |-- MATLAB source files (from-scratch MFCC implementation)
+|   |   |-- preemphasis.m              <-- Pre-emphasis filter (alpha=0.97)
+|   |   |-- frame_signal.m             <-- Frame blocking (256 samples, hop 100)
+|   |   |-- apply_window.m             <-- Hamming window
+|   |   |-- compute_power_spectrum.m   <-- FFT + power spectrum (512-point)
+|   |   |-- apply_mel_filterbank.m     <-- 26-channel mel filterbank
+|   |   |-- apply_log.m                <-- Logarithmic compression
+|   |   |-- apply_dct.m                <-- DCT for 13 MFCC coefficients
+|   |   |-- compute_delta.m            <-- Delta and delta-delta computation
+|   |   |-- mfcc.m                     <-- Wrapper: full pipeline
+|   |   +-- melfb.m                    <-- Mel filterbank matrix generator
 |   |
 |   |-- export_mfcc_features.m         <-- Batch export: .wav -> .mat (MATLAB)
 |   |-- Final_assemble.mlx             <-- MATLAB Live Script walkthrough
@@ -138,7 +127,7 @@ Researched the mathematics behind Mel-Frequency Cepstral Coefficients: the mel s
 
 ### Step 2 -- Implement MFCC from Scratch in MATLAB
 
-Built each processing stage as a standalone MATLAB function:
+Built each processing stage as a standalone MATLAB function in the `Final/` directory:
 
 | Step | Function | Operation |
 |------|----------|-----------|
@@ -155,7 +144,9 @@ The output per frame is a 39-dimensional vector: 13 MFCCs + 13 deltas + 13 delta
 
 ### Step 3 -- Validate the MATLAB Pipeline
 
-Used `test_mfcc.m` and the `Final_assemble.mlx` Live Script to visually verify each intermediate result -- spectrograms, mel filterbank shapes, MFCC heatmaps, and delta patterns -- against known references.
+Used the `Final/Final_assemble.mlx` Live Script to visually verify each intermediate result -- spectrograms, mel filterbank shapes, MFCC heatmaps, and delta patterns -- against known references.
+
+**Note:** The `MFCC/matlab/` folder contains early prototypes and learning materials and is excluded from the repository. The production MATLAB implementation resides in `Final/`.
 
 ### Step 4 -- Record and Organize Speaker Data
 
@@ -226,7 +217,7 @@ Converted the training pipeline into `Speaker_Recognition_GMM_UBM.ipynb`, a 19-s
 
 ## Phase 1 -- MFCC Feature Extraction (MATLAB)
 
-All code lives in `MFCC/matlab/` and is duplicated into `Final/` for the integrated pipeline.
+All production MATLAB code resides in the `Final/` directory.
 
 ### Parameters
 
