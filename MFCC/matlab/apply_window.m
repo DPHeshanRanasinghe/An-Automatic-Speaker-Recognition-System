@@ -1,0 +1,142 @@
+function windowed_frames = apply_window(frames)
+% APPLY_WINDOW - Apply Hamming window to each frame
+%
+% This is Step 3 of the MFCC pipeline. Windowing reduces spectral leakage
+% when we take the FFT. Without windowing, the abrupt edges of each frame
+% create high-frequency artifacts in the spectrum.
+%
+% INPUT:
+%   frames - matrix where each ROW is one frame
+%            Size: (num_frames × frame_length)
+%
+% OUTPUT:
+%   windowed_frames - windowed frames (same size as input)
+%
+% MATH:
+%   Hamming window: w[n] = 0.54 - 0.46 * cos(2πn/(N-1))
+%   Applied element-wise: windowed_frame[n] = frame[n] * w[n]
+%
+% USAGE:
+%   windowed = apply_window(frames);
+%
+% EXAMPLE:
+%   frames = frame_signal(signal, 256, 100);
+%   windowed = apply_window(frames);
+%   
+%   % Compare one frame before/after windowing
+%   figure;
+%   subplot(2,1,1); plot(frames(10,:)); title('Before Windowing');
+%   subplot(2,1,2); plot(windowed(10,:)); title('After Hamming Window');
+%   % Notice the edges taper to zero smoothly
+%   
+%   % Compare spectra
+%   figure;
+%   subplot(2,1,1); 
+%   [pxx,f] = pwelch(frames(10,:), [], [], [], 16000);
+%   plot(f, 10*log10(pxx)); title('Spectrum: No Window');
+%   subplot(2,1,2);
+%   [pxx,f] = pwelch(windowed(10,:), [], [], [], 16000);
+%   plot(f, 10*log10(pxx)); title('Spectrum: Hamming Window');
+%   % Notice reduced side lobes!
+
+% =========================================================================
+% Get dimensions
+% =========================================================================
+[num_frames, frame_length] = size(frames);
+
+% =========================================================================
+% Create Hamming window
+% =========================================================================
+% IMPORTANT: Use 'periodic' flag for DFT/FFT analysis
+% 'periodic' creates a window of length N suitable for N-point DFT
+% 'symmetric' (default) creates a window for FIR filter design
+window = hamming(frame_length, 'periodic');
+% window is a column vector of length frame_length
+
+% =========================================================================
+% Apply window to all frames
+% =========================================================================
+% We need to multiply each row of frames by the window
+% The window is a column vector, so we transpose it to a row
+
+% Method 1: Using bsxfun (works in all MATLAB versions)
+windowed_frames = bsxfun(@times, frames, window');
+
+% Method 2: Implicit expansion (MATLAB R2016b and later)
+% Uncomment this if you have a newer MATLAB version:
+% windowed_frames = frames .* window';
+
+% Method 3: Explicit loop (slowest but clearest)
+% Uncomment to see exactly what's happening:
+% windowed_frames = zeros(size(frames));
+% for i = 1:num_frames
+%     windowed_frames(i, :) = frames(i, :) .* window';
+% end
+
+% =========================================================================
+% DEBUGGING / VERIFICATION (uncomment to check)
+% =========================================================================
+% fprintf('Windowing applied:\n');
+% fprintf('  Num frames:     %d\n', num_frames);
+% fprintf('  Frame length:   %d\n', frame_length);
+% fprintf('  Window type:    Hamming (periodic)\n');
+% fprintf('  Window min:     %.4f\n', min(window));
+% fprintf('  Window max:     %.4f\n', max(window));
+% fprintf('  Output size:    %d × %d\n', size(windowed_frames,1), size(windowed_frames,2));
+
+end
+
+% =========================================================================
+% TECHNICAL NOTES:
+% =========================================================================
+% 1. Why Hamming window?
+%    The Hamming window has excellent side-lobe suppression (−43 dB).
+%    This means that spectral leakage from strong frequency components
+%    is well-controlled. Other common windows:
+%    - Hann (Hanning): −32 dB side lobes, faster roll-off
+%    - Blackman: −58 dB side lobes, wider main lobe
+%    - Kaiser: adjustable trade-off (set β parameter)
+%    Hamming is the default choice for speech processing.
+%
+% 2. What is spectral leakage?
+%    The DFT assumes the signal repeats periodically. When we cut a frame
+%    out of a longer signal, it creates a discontinuity at the edges
+%    (frame[0] ≠ frame[N-1]). This discontinuity is like a sharp edge,
+%    which contains energy at ALL frequencies. This "leaks" into the
+%    spectrum, creating false peaks and obscuring the true frequencies.
+%    
+%    The window tapers the edges to zero, eliminating the discontinuity.
+%
+% 3. Hamming window formula:
+%    w[n] = 0.54 - 0.46 * cos(2πn/(N-1)),  n = 0, 1, ..., N-1
+%    
+%    At the edges (n=0 and n=N-1):  cos(0) = cos(2π) = 1
+%       → w = 0.54 - 0.46 = 0.08  (nearly zero)
+%    At the center (n=(N-1)/2):    cos(π) = −1
+%       → w = 0.54 + 0.46 = 1.0   (full amplitude)
+%    
+%    The constants 0.54 and 0.46 are chosen to place a zero of the
+%    window's DTFT at the first side-lobe location of a rectangular
+%    window's DTFT, achieving the −43 dB suppression.
+%
+% 4. 'periodic' vs 'symmetric':
+%    - 'periodic': N-sample window where w[0] ≠ w[N-1]
+%                  Used for DFT/FFT analysis (overlap-add processing)
+%                  This is what you want for MFCC!
+%    - 'symmetric': (N+1)-sample window symmetric about center, 
+%                   then truncated to N samples so w[0] = w[N-1]
+%                   Used for FIR filter design
+%    
+%    For FFT analysis, 'periodic' is correct. Using 'symmetric' by
+%    mistake won't break things, but gives slightly suboptimal results.
+%
+% 5. Trade-off: main lobe width vs side lobe level
+%    Windowing improves side lobe suppression but widens the main lobe,
+%    reducing frequency resolution. The Hamming window is a good balance:
+%    - Main lobe width: 1.3× that of rectangular window
+%    - Side lobe level: −43 dB (vs −13 dB for rectangular)
+%    
+%    This trade-off is acceptable for speech because the frequency
+%    resolution loss is small and the spectral leakage reduction is huge.
+%
+% =========================================================================
