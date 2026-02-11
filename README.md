@@ -180,7 +180,7 @@ Evaluated three candidate architectures:
 Implemented `train_gmm_ubm.py` with:
 
 - A `Config` class centralizing all hyperparameters.
-- A data loader that transposes MATLAB's (13 x N) matrices to Python's (N x 13) convention and horizontally stacks the three coefficient sets into (N x 39).
+- A data loader that transposes MATLAB's (39 x N) matrices to Python's (N x 39) convention and horizontally stacks the three coefficient sets into (N x 39).
 - A `GMMUBMSystem` class encapsulating UBM training (sklearn `GaussianMixture`), MAP adaptation (mean and weight update with configurable relevance factor), scoring (log-likelihood ratio against the UBM), and identification (softmax over scores).
 - Model serialization to `trained_models/gmm_ubm_model.pkl`.
 
