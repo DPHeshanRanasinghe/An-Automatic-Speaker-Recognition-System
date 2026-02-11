@@ -1,6 +1,6 @@
 function mfcc_coeffs = apply_dct(log_mel, num_coeffs)
 
-[num_frames, num_filters] = size(log_mel);
+[~, num_filters] = size(log_mel);
 
 % Validate num_coeffs
 if num_coeffs < 1
@@ -12,25 +12,11 @@ if num_coeffs > num_filters
           num_coeffs, num_filters);
 end
 
-log_mel_T = log_mel';
+dct_result = dct(log_mel);
 
-% Apply DCT to each column (i.e., to each frame)
-dct_result = dct(log_mel_T);
-
-% Keep only the first num_coeffs rows
 dct_coeffs = dct_result(1:num_coeffs, :);
-% Now: (num_coeffs × num_frames)
 
-% Transpose back to get (num_frames × num_coeffs)
-mfcc_coeffs = dct_coeffs';
-
-% fprintf('DCT applied:\n');
-% fprintf('  Input size:     %d frames × %d filters\n', num_frames, num_filters);
-% fprintf('  Num coeffs:     %d\n', num_coeffs);
-% fprintf('  Output size:    %d × %d\n', size(mfcc_coeffs,1), size(mfcc_coeffs,2));
-% fprintf('  MFCC range:     [%.2f, %.2f]\n', min(mfcc_coeffs(:)), max(mfcc_coeffs(:)));
-% fprintf('  MFCC mean:      %.4f\n', mean(mfcc_coeffs(:)));
-% fprintf('  MFCC std:       %.4f\n', std(mfcc_coeffs(:)));
+mfcc_coeffs = dct_coeffs;
 
 end
 

@@ -1,74 +1,13 @@
 function windowed_frames = apply_window(frames)
 
-%   Hamming window: w[n] = 0.54 - 0.46 * cos(2πn/(N-1))
-%   Applied element-wise: windowed_frame[n] = frame[n] * w[n]
+% frames: [frame_length × num_frames]
 
-[num_frames, frame_length] = size(frames);
+[frame_length, ~] = size(frames);
 
-% 'periodic' creates a window of length N suitable for N-point DFT
-window = hamming(frame_length, 'periodic');
-% window is a column vector of length frame_length
+% Periodic Hamming window for FFT analysis
+window = hamming(frame_length, 'periodic');  % column vector
 
-windowed_frames = bsxfun(@times, frames, window');
-
-% fprintf('Windowing applied:\n');
-% fprintf('  Num frames:     %d\n', num_frames);
-% fprintf('  Frame length:   %d\n', frame_length);
-% fprintf('  Window type:    Hamming (periodic)\n');
-% fprintf('  Window min:     %.4f\n', min(window));
-% fprintf('  Window max:     %.4f\n', max(window));
-% fprintf('  Output size:    %d × %d\n', size(windowed_frames,1), size(windowed_frames,2));
+% Apply window to each frame (column-wise)
+windowed_frames = frames .* window;
 
 end
-
-% TECHNICAL NOTES:
-% 1. Why Hamming window?
-%    The Hamming window has excellent side-lobe suppression (−43 dB).
-%    This means that spectral leakage from strong frequency components
-%    is well-controlled. Other common windows:
-%    - Hann (Hanning): −32 dB side lobes, faster roll-off
-%    - Blackman: −58 dB side lobes, wider main lobe
-%    - Kaiser: adjustable trade-off (set β parameter)
-%    Hamming is the default choice for speech processing.
-%
-% 2. What is spectral leakage?
-%    The DFT assumes the signal repeats periodically. When we cut a frame
-%    out of a longer signal, it creates a discontinuity at the edges
-%    (frame[0] ≠ frame[N-1]). This discontinuity is like a sharp edge,
-%    which contains energy at ALL frequencies. This "leaks" into the
-%    spectrum, creating false peaks and obscuring the true frequencies.
-%    
-%    The window tapers the edges to zero, eliminating the discontinuity.
-%
-% 3. Hamming window formula:
-%    w[n] = 0.54 - 0.46 * cos(2πn/(N-1)),  n = 0, 1, ..., N-1
-%    
-%    At the edges (n=0 and n=N-1):  cos(0) = cos(2π) = 1
-%       → w = 0.54 - 0.46 = 0.08  (nearly zero)
-%    At the center (n=(N-1)/2):    cos(π) = −1
-%       → w = 0.54 + 0.46 = 1.0   (full amplitude)
-%    
-%    The constants 0.54 and 0.46 are chosen to place a zero of the
-%    window's DTFT at the first side-lobe location of a rectangular
-%    window's DTFT, achieving the −43 dB suppression.
-%
-% 4. 'periodic' vs 'symmetric':
-%    - 'periodic': N-sample window where w[0] ≠ w[N-1]
-%                  Used for DFT/FFT analysis (overlap-add processing)
-%                  This is what you want for MFCC!
-%    - 'symmetric': (N+1)-sample window symmetric about center, 
-%                   then truncated to N samples so w[0] = w[N-1]
-%                   Used for FIR filter design
-%    
-%    For FFT analysis, 'periodic' is correct. Using 'symmetric' by
-%    mistake won't break things, but gives slightly suboptimal results.
-%
-% 5. Trade-off: main lobe width vs side lobe level
-%    Windowing improves side lobe suppression but widens the main lobe,
-%    reducing frequency resolution. The Hamming window is a good balance:
-%    - Main lobe width: 1.3× that of rectangular window
-%    - Side lobe level: −43 dB (vs −13 dB for rectangular)
-%    
-%    This trade-off is acceptable for speech because the frequency
-%    resolution loss is small and the spectral leakage reduction is huge.
-

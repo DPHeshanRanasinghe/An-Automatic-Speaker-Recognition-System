@@ -1,8 +1,18 @@
 function mel_energies = apply_mel_filterbank(power_spectrum, fs, nfft, num_filters)
+% APPLY_MEL_FILTERBANK - Apply mel filterbank to power spectrum
+% INPUTS:
+%   power_spectrum - power spectrum matrix (num_bins × num_frames)
+%                    Each COLUMN is one frame's power spectrum
+%   fs             - sampling frequency (Hz), e.g., 16000
+%   nfft           - FFT size used to compute power_spectrum
+%   num_filters    - number of mel filters (typically 20-40, common: 26)
+%
+% OUTPUT:
+%   mel_energies - mel filterbank energies (num_filters × num_frames)
+%                  Each COLUMN is one frame's mel energies
 
-[num_frames, num_bins] = size(power_spectrum);
+[num_bins, num_frames] = size(power_spectrum);
 
-% Validate num_bins matches nfft
 expected_bins = nfft/2 + 1;
 if num_bins ~= expected_bins
     error(['Power spectrum has %d bins but expected %d bins for nfft=%d.\n' ...
@@ -12,6 +22,7 @@ end
 
 filterbank = melfb(num_filters, nfft, fs);
 
+% Validate filterbank dimensions
 [fb_rows, fb_cols] = size(filterbank);
 
 if fb_rows ~= num_filters
@@ -24,113 +35,39 @@ if fb_cols ~= num_bins
           fb_cols, num_bins);
 end
 
-% We want: each frame's power spectrum → mel energies
-% 
-% power_spectrum: (num_frames × num_bins)   e.g., (100 × 257)
-% filterbank:     (num_filters × num_bins)  e.g., (26 × 257)
-% 
-% To multiply: (100 × 257) · (257 × 26) = (100 × 26)
-% So we need filterbank transposed!
 
-mel_energies = power_spectrum * filterbank';
-% Result: (num_frames × num_filters)
+% Apply mel filterbank via matrix multiplication
+% We have:
+%   filterbank:     (num_filters × num_bins)    e.g., (26 × 257)
+%   power_spectrum: (num_bins × num_frames)     e.g., (257 × 131)
+%
+% Matrix multiply: (26 × 257) × (257 × 131) = (26 × 131)
+% Result: each COLUMN is one frame's mel energies
 
-% DEBUGGING / VERIFICATION (uncomment to check)
-% fprintf('Mel filterbank applied:\n');
-% fprintf('  Num frames:     %d\n', num_frames);
-% fprintf('  Power bins:     %d\n', num_bins);
-% fprintf('  Num filters:    %d\n', num_filters);
-% fprintf('  Filterbank size: %d × %d\n', fb_rows, fb_cols);
-% fprintf('  Output size:    %d × %d\n', size(mel_energies,1), size(mel_energies,2));
-% fprintf('  Energy range:   [%.2e, %.2e]\n', min(mel_energies(:)), max(mel_energies(:)));
-% % Check for any zero or negative energies
+mel_energies = filterbank * power_spectrum;
+% Result: (num_filters × num_frames)
 
 end
 
+
 % TECHNICAL NOTES:
-% 1. What is the mel scale?
-%    The mel scale is a perceptual frequency scale based on how humans
-%    perceive pitch. Equal distances on the mel scale correspond to
-%    equal perceived differences in pitch.
-%    
-%    Conversion formulas:
-%       mel(f) = 2595 * log₁₀(1 + f/700)
-%       f(mel) = 700 * (10^(mel/2595) - 1)
-%    
-%    At low frequencies (f < 1000 Hz), the relationship is approximately
-%    linear (1 mel ≈ 1 Hz). At high frequencies, it's logarithmic.
-%    
-%    Examples:
-%       f = 0 Hz     → mel = 0
-%       f = 1000 Hz  → mel ≈ 1000
-%       f = 4000 Hz  → mel ≈ 2500
-%       f = 8000 Hz  → mel ≈ 2840
-%    
-%    This matches psychoacoustic experiments: we're good at distinguishing
-%    200 Hz from 250 Hz (50 Hz difference), but we need a bigger
-%    difference to distinguish 4000 Hz from 4050 Hz.
-%
-% 2. Triangular filter shape:
-%    Each mel filter is a triangle in the frequency domain:
-%    - Left edge at frequency f[i-1]
-%    - Peak (value = 1.0) at frequency f[i]
-%    - Right edge at frequency f[i+1]
-%    - Zero everywhere else
-%    
-%    The filters overlap: each frequency bin contributes to at most
-%    2 filters (the rising slope of one and the falling slope of the next).
-%    
-%    This ensures smooth coverage of the spectrum — no gaps, no double-
-%    counting, just a gentle redistribution of energy from linear frequency
-%    bins to perceptually-spaced mel bins.
-%
-% 3. Why 26 filters?
-%    This is a convention from early speech recognition work. The number
-%    can range from 20 to 40:
-%    - Fewer filters (20): faster, less detail
-%    - More filters (40): more detail, more computation, risk of overfitting
-%    
-%    26 is a good balance. It's enough to capture formant structure
-%    (typically 3-5 formants in vowels) with some redundancy.
+% Your technical notes are EXCELLENT - keep them all!
+% 
+% Just update note #4 to reflect correct dimensions:
 %
 % 4. Matrix multiplication explanation:
-%    Each row of power_spectrum is one frame (257 frequency bins).
-%    Each row of filterbank is one triangular filter (257 weights).
+%    power_spectrum: (num_frames × num_bins)    - each ROW is one frame
+%    filterbank:     (num_filters × num_bins)   - each ROW is one filter
 %    
-%    The dot product of one frame with one filter gives the energy
-%    in that mel band for that frame. We do this for all frames and
-%    all filters via matrix multiplication:
+%    To compute mel energies, we multiply:
+%       (num_frames × num_bins) × (num_bins × num_filters)
+%       = (num_frames × num_filters)
 %    
-%    mel_energies[frame_i, filter_j] = Σ_k power[frame_i, k] * filterbank[filter_j, k]
+%    This requires filterbank TRANSPOSED:
+%       mel_energies = power_spectrum * filterbank'
 %    
-%    In matrix form: mel_energies = power_spectrum * filterbank'
-%
-% 5. Why transpose the filterbank?
-%    MATLAB's matrix multiply (A * B) requires:
-%    - A is (m × n)
-%    - B is (n × p)
-%    - Result is (m × p)
+%    For frame i and mel band j:
+%       mel_energies[i, j] = Σ_k power_spectrum[i, k] × filterbank[j, k]
 %    
-%    We have:
-%    - power_spectrum: (num_frames × num_bins)
-%    - filterbank: (num_filters × num_bins)
-%    
-%    To match dimensions, we transpose filterbank:
-%    - filterbank': (num_bins × num_filters)
-%    
-%    Then: (num_frames × num_bins) · (num_bins × num_filters)
-%          = (num_frames × num_filters) ✓
-%
-% 6. Physical meaning:
-%    mel_energies[i, j] = total energy in frame i within mel band j
-%    
-%    This is a compressed representation: we've gone from 257 frequency
-%    bins down to 26 mel bands, capturing the perceptually-relevant
-%    spectral envelope while discarding fine detail.
-%
-% 7. Relation to human hearing:
-%    The cochlea (inner ear) acts as a bank of overlapping bandpass
-%    filters with approximately logarithmic spacing. The mel filterbank
-%    is a simplified model of this. MFCC features based on mel filtering
-%    are easier for machine learning algorithms to work with than raw
-%    spectra because they match how humans process sound.
+%    This sums the power across all frequency bins, weighted by the
+%    triangular filter, giving the total energy in that mel band.

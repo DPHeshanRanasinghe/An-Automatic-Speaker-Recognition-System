@@ -1,82 +1,93 @@
 function filterbank = melfb(num_filters, nfft, fs)
+% MELFB - Create mel-spaced triangular filterbank
+%
+% INPUTS:
+%   num_filters - number of mel filters (e.g., 26)
+%   nfft        - FFT size (e.g., 512)
+%   fs          - sampling frequency (e.g., 16000 Hz)
+%
+% OUTPUT:
+%   filterbank  - (num_filters × num_bins) matrix of triangular filters
+
+% Input validation
 if num_filters < 1
     error('num_filters must be >= 1');
 end
-
 if nfft < 2
     error('nfft must be >= 2');
 end
-
 if fs <= 0
     error('Sampling frequency must be positive');
 end
 
-% Minimum frequency: 0 Hz (or sometimes 20-80 Hz to exclude DC noise)
-% Maximum frequency: Nyquist frequency (fs/2)
-f_min = 0;       % Lower frequency bound (Hz)
-f_max = fs / 2;  % Upper frequency bound (Nyquist)
+% Frequency limits
+f_min = 0;        % Start at DC (can change to 20-80 Hz to exclude low noise)
+f_max = fs / 2;   % Nyquist frequency
 
+% Convert to mel scale
 mel_min = hz_to_mel(f_min);
 mel_max = hz_to_mel(f_max);
 
+% Mel-spaced points
+% Create num_filters+2 points (includes left/right edges)
 mel_points = linspace(mel_min, mel_max, num_filters + 2);
+hz_points  = mel_to_hz(mel_points);
 
-% Convert mel points back to Hz
-hz_points = mel_to_hz(mel_points);
+% Map Hz frequencies to FFT bin indices
+num_bins = nfft / 2 + 1;  % Only positive frequencies
 
-num_bins = nfft / 2 + 1;  % Number of positive frequency bins
-bin_points = round(hz_points * nfft / fs) + 1;  % +1 for MATLAB 1-indexing
+% Convert Hz to bin indices
+% bin = floor(freq * nfft / fs) + 1  (MATLAB 1-indexing)
+bin_points = floor(hz_points * nfft / fs) + 1;
 
-% Ensure bin indices are within valid range
+% Clamp to valid range [1, num_bins]
 bin_points = max(1, min(num_bins, bin_points));
 
+% Check for degenerate filters (optional but recommended)
+if any(diff(bin_points) == 0)
+    warning('melfb:degenerateFilters', ...
+            'Some filters have zero width. Consider increasing nfft or reducing num_filters.');
+end
+
+% Create triangular filterbank
 filterbank = zeros(num_filters, num_bins);
 
 for m = 1:num_filters
-    % Get the three bin indices for this filter
-    % f[m-1], f[m], f[m+1] in 0-indexed terms
-    % In MATLAB: bin_points(m), bin_points(m+1), bin_points(m+2)
+    left   = bin_points(m);
+    center = bin_points(m + 1);
+    right  = bin_points(m + 2);
     
-    left_bin   = bin_points(m);      % Left edge
-    center_bin = bin_points(m + 1);  % Center (peak)
-    right_bin  = bin_points(m + 2);  % Right edge
-    
-    % Rising slope: from left_bin to center_bin
-    for k = left_bin:center_bin
-        if center_bin ~= left_bin  % Avoid division by zero
-            filterbank(m, k) = (k - left_bin) / (center_bin - left_bin);
+    % Rising slope: left → center
+    for k = left:center
+        if center > left
+            filterbank(m, k) = (k - left) / (center - left);
         end
     end
     
-    % Falling slope: from center_bin to right_bin
-    for k = center_bin:right_bin
-        if right_bin ~= center_bin  % Avoid division by zero
-            filterbank(m, k) = (right_bin - k) / (right_bin - center_bin);
+    % Falling slope: center → right
+    for k = center:right
+        if right > center
+            filterbank(m, k) = (right - k) / (right - center);
         end
+    end
+    
+    % Slaney-style normalization (normalize area to 1)
+    filter_sum = sum(filterbank(m, :));
+    if filter_sum > 0
+        filterbank(m, :) = filterbank(m, :) / filter_sum;
     end
 end
 
-% fprintf('Mel filterbank created:\n');
-% fprintf('  Num filters:    %d\n', num_filters);
-% fprintf('  NFFT:           %d\n', nfft);
-% fprintf('  Sampling rate:  %d Hz\n', fs);
-% fprintf('  Freq range:     %.1f - %.1f Hz\n', f_min, f_max);
-% fprintf('  Mel range:      %.1f - %.1f mel\n', mel_min, mel_max);
-% fprintf('  Output size:    %d × %d\n', size(filterbank,1), size(filterbank,2));
-% fprintf('  Non-zero bins per filter: %d to %d\n', min(sum(filterbank > 0, 2)), max(sum(filterbank > 0, 2)));
-
 end
 
-% HELPER FUNCTIONS
+% Helper functions
 function mel = hz_to_mel(hz)
-% Convert frequency in Hz to mel scale
-% Formula: mel = 2595 * log10(1 + f/700)
+    % O'Shaughnessy formula
     mel = 2595 * log10(1 + hz / 700);
 end
 
 function hz = mel_to_hz(mel)
-% Convert mel scale to frequency in Hz
-% Formula: f = 700 * (10^(mel/2595) - 1)
+    % Inverse of O'Shaughnessy formula
     hz = 700 * (10.^(mel / 2595) - 1);
 end
 
