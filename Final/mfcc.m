@@ -247,13 +247,19 @@ end
 % STEP 8.5: OPTIONAL - DROP C0 (ENERGY COEFFICIENT)
 % =========================================================================
 % The first coefficient (c0) is proportional to log-energy/loudness.
-% Some systems drop it because it's volume-dependent, not speaker-dependent.
+% Some systems drop it because it's volume-dependent, not
+% speaker-dependent.
+
+drop_c0 = false;
 if drop_c0
-    mfcc_coeffs = mfcc_coeffs(:, 2:end);  % Remove first column (c0)
+    mfcc_coeffs = mfcc_coeffs(2:end, :);  % Remove c0 coefficient
     if show_progress
         fprintf('  ⚠ Dropped c0 coefficient (energy term)\n\n');
     end
 end
+
+
+
 
 % =========================================================================
 % STEP 9: COMPUTE DELTA AND DELTA-DELTA FEATURES
@@ -276,7 +282,7 @@ if show_progress
 end
 
 % Concatenate to form 39-dimensional feature vector
-features = [mfcc_coeffs, delta_coeffs, delta2_coeffs];
+features = [mfcc_coeffs; delta_coeffs; delta2_coeffs];
 
 if show_progress
     fprintf('========================================\n');
