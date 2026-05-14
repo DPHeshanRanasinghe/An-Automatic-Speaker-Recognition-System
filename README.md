@@ -122,12 +122,6 @@ An-Automatic-Speaker-Recognition-System/
 |-- README.md                          <-- This file
 |
 |-- MFCC/                              <-- Learning materials and theory exploration
-|   |-- matlab/                        <-- Early prototypes and experiments
-|   |-- MFCC.ipynb                     <-- Python MFCC exploration notebook
-|   |-- Learn_MFCC.ipynb               <-- MFCC theory and derivation notebook
-|   |-- ComputeMelfrequencyCepstralCoefficientsExample.mlx
-|   |-- ExtractMFCCFromFrequencyDomainAudioExample.mlx
-|   +-- Reference PDFs                 <-- Technical documentation
 |
 |-- Final/                             <-- Final speaker recognition system
 |   |-- data/
