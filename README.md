@@ -1,6 +1,10 @@
 # An Automatic Speaker Recognition System
 
-A complete, end-to-end speaker recognition pipeline that identifies _who_ is speaking from a short audio recording. The system combines a **from-scratch MFCC feature extraction** implementation in MATLAB with a **GMM-UBM (Gaussian Mixture Model -- Universal Background Model)** speaker identification engine in Python, achieving **100% identification accuracy** on the included 8-speaker dataset.
+This project is a complete speaker recognition system that identifies **who is speaking** from a short audio recording.
+
+The system has two main parts. First, the MFCC feature extraction pipeline is implemented from scratch in MATLAB. Then, the extracted features are used in Python to train a GMM-UBM based speaker identification system.
+
+The purpose of this project is not only to build a working system, but also to understand the full signal-processing and machine-learning pipeline behind speaker recognition.
 
 ---
 
@@ -10,314 +14,598 @@ A complete, end-to-end speaker recognition pipeline that identifies _who_ is spe
 2. [System Architecture](#system-architecture)
 3. [Repository Structure](#repository-structure)
 4. [Development Procedure](#development-procedure)
-5. [Phase 1 -- MFCC Feature Extraction (MATLAB)](#phase-1----mfcc-feature-extraction-matlab)
+5. [Phase 1 -- MFCC Feature Extraction in MATLAB](#phase-1----mfcc-feature-extraction-in-matlab)
 6. [Phase 2 -- Feature Export](#phase-2----feature-export)
-7. [Phase 3 -- GMM-UBM Speaker Recognition (Python)](#phase-3----gmm-ubm-speaker-recognition-python)
+7. [Phase 3 -- GMM-UBM Speaker Recognition in Python](#phase-3----gmm-ubm-speaker-recognition-in-python)
 8. [Phase 4 -- Jupyter Notebook with Visualizations](#phase-4----jupyter-notebook-with-visualizations)
 9. [How to Run](#how-to-run)
-10. [Usage Guide -- Command-Line Scripts](#usage-guide----command-line-scripts)
+10. [Usage Guide](#usage-guide)
 11. [Technical Details](#technical-details)
 12. [Results](#results)
 13. [Dependencies](#dependencies)
-14. [References](#references)
+14. [Important Notes](#important-notes)
+15. [References](#references)
 
 ---
 
 ## Project Overview
 
-The goal of this project is to build a system that, given a short speech segment from one of eight enrolled speakers, determines which speaker produced it and reports a confidence level for that prediction.
+The goal of this project is to identify the speaker from a short speech recording. The current dataset contains 8 enrolled speakers, labelled from `s1` to `s8`.
 
-The project is divided into two major phases:
+For each audio recording, the system extracts MFCC-based features. These features are then used to train a speaker recognition model. During testing, the model compares the test utterance against all enrolled speaker models and predicts the most likely speaker.
 
-| Phase | Tool | Purpose |
-|-------|------|---------|
-| Feature Extraction | MATLAB | Implement every step of the MFCC algorithm from scratch -- pre-emphasis, framing, windowing, FFT, mel filterbank, log compression, DCT, and delta computation -- to produce 39-dimensional feature vectors. |
-| Speaker Modelling | Python | Train a Universal Background Model on pooled data, MAP-adapt it to each speaker, score test utterances via log-likelihood ratios, and output speaker identity with calibrated confidence. |
+The complete feature vector for each frame has 39 values:
+
+```text
+13 MFCC coefficients
++ 13 Delta coefficients
++ 13 Delta-Delta coefficients
+= 39 features per frame
+```
+
+In MATLAB, the exported feature matrix is stored as:
+
+```text
+39 × M
+```
+
+where:
+
+```text
+39 = feature dimension
+M  = number of frames
+```
+
+When loaded into Python, this is converted to:
+
+```text
+M × 39
+```
+
+because Python machine learning libraries usually expect:
+
+```text
+samples × features
+```
 
 ---
 
 ## System Architecture
 
-```
+```text
 Audio (.wav)
     |
     v
 [MATLAB -- MFCC from scratch]
-    preemphasis  ->  frame_signal  ->  apply_window
-        ->  compute_power_spectrum  ->  apply_mel_filterbank
-        ->  apply_log  ->  apply_dct  ->  compute_delta
+    |
+    |-- preemphasis.m
+    |-- frame_signal.m
+    |-- apply_window.m
+    |-- compute_power_spectrum.m
+    |-- melfb.m
+    |-- apply_mel_filterbank.m
+    |-- apply_log.m
+    |-- apply_dct.m
+    |-- compute_delta.m
     |
     v
-39-dim features per frame  (13 MFCC + 13 Delta + 13 Delta-Delta)
+39-dimensional features per frame
     |
     v
-export_mfcc_features.m  -->  .mat files (exported_features/)
+export_mfcc_features.m
     |
     v
-[Python -- GMM-UBM Engine]
-    Load .mat  ->  Train UBM (pooled)  ->  MAP Adapt per speaker
-        ->  Score (log-likelihood ratio)  ->  Softmax confidence
+MATLAB .mat feature files
     |
     v
-Predicted speaker + confidence %
+[Python -- GMM-UBM Speaker Recognition]
+    |
+    |-- Load .mat files
+    |-- Convert MATLAB feature orientation to Python format
+    |-- Train Universal Background Model
+    |-- MAP adapt one model per speaker
+    |-- Score test utterances
+    |
+    v
+Predicted speaker + confidence score
 ```
 
-At inference time, the Python pipeline can also extract MFCCs directly from a `.wav` file using `librosa`, eliminating the need for MATLAB.
+The Python side also includes a `librosa`-based pipeline, so speaker recognition can be tested directly from `.wav` files without depending on MATLAB-exported features.
 
 ---
 
 ## Repository Structure
 
-```
+```text
 An-Automatic-Speaker-Recognition-System/
 |
 |-- README.md                          <-- This file
 |
 |-- MFCC/                              <-- Learning materials and theory exploration
-|   |-- matlab/                        <-- (Excluded from git - early prototypes)
+|   |-- matlab/                        <-- Early prototypes and experiments
 |   |-- MFCC.ipynb                     <-- Python MFCC exploration notebook
-|   |-- Learn_MFCC.ipynb               <-- Theory and derivation notebook
+|   |-- Learn_MFCC.ipynb               <-- MFCC theory and derivation notebook
 |   |-- ComputeMelfrequencyCepstralCoefficientsExample.mlx
 |   |-- ExtractMFCCFromFrequencyDomainAudioExample.mlx
 |   +-- Reference PDFs                 <-- Technical documentation
 |
-|-- Final/                             <-- Phase 2-4: Complete recognition system
+|-- Final/                             <-- Final speaker recognition system
 |   |-- data/
-|   |   |-- train/                     <-- 8 training recordings (s1.wav .. s8.wav)
-|   |   +-- test/                      <-- 8 test recordings    (s1.wav .. s8.wav)
+|   |   |-- train/                     <-- Training recordings: s1.wav to s8.wav
+|   |   +-- test/                      <-- Test recordings: s1.wav to s8.wav
 |   |
-|   |-- exported_features/             <-- MATLAB-exported .mat files
-|   |   |-- train/                     <-- s1_mfcc.mat .. s8_mfcc.mat
-|   |   |-- test/                      <-- s1_mfcc.mat .. s8_mfcc.mat
+|   |-- exported_features/             <-- MATLAB-exported feature files
+|   |   |-- train/                     <-- s1_mfcc.mat to s8_mfcc.mat
+|   |   |-- test/                      <-- s1_mfcc.mat to s8_mfcc.mat
 |   |   +-- metadata.mat
 |   |
 |   |-- trained_models/
-|   |   +-- gmm_ubm_model.pkl          <-- Serialized UBM + speaker GMMs + scaler
+|   |   +-- gmm_ubm_model.pkl          <-- Saved UBM, speaker GMMs, and scaler
 |   |
-|   |-- MATLAB source files (from-scratch MFCC implementation)
-|   |   |-- preemphasis.m              <-- Pre-emphasis filter (alpha=0.97)
-|   |   |-- frame_signal.m             <-- Frame blocking (256 samples, hop 100)
+|   |-- MATLAB source files
+|   |   |-- preemphasis.m              <-- Pre-emphasis filter
+|   |   |-- frame_signal.m             <-- Frame blocking
 |   |   |-- apply_window.m             <-- Hamming window
-|   |   |-- compute_power_spectrum.m   <-- FFT + power spectrum (512-point)
-|   |   |-- apply_mel_filterbank.m     <-- 26-channel mel filterbank
-|   |   |-- apply_log.m                <-- Logarithmic compression
-|   |   |-- apply_dct.m                <-- DCT for 13 MFCC coefficients
-|   |   |-- compute_delta.m            <-- Delta and delta-delta computation
-|   |   |-- mfcc.m                     <-- Wrapper: full pipeline
-|   |   +-- melfb.m                    <-- Mel filterbank matrix generator
+|   |   |-- compute_power_spectrum.m   <-- FFT and power spectrum
+|   |   |-- melfb.m                    <-- Mel filterbank generator
+|   |   |-- apply_mel_filterbank.m     <-- Mel filterbank application
+|   |   |-- apply_log.m                <-- Log compression
+|   |   |-- apply_dct.m                <-- DCT for MFCC coefficients
+|   |   |-- compute_delta.m            <-- Delta and delta-delta calculation
+|   |   +-- mfcc.m                     <-- Full MATLAB MFCC wrapper
 |   |
-|   |-- export_mfcc_features.m         <-- Batch export: .wav -> .mat (MATLAB)
+|   |-- export_mfcc_features.m         <-- Batch feature export script
 |   |-- Final_assemble.mlx             <-- MATLAB Live Script walkthrough
 |   |
-|   |-- train_gmm_ubm.py              <-- Train + evaluate GMM-UBM (Python)
-|   |-- identify_speaker.py           <-- Real-time inference from wav/mat/mic
-|   |-- test_pipeline.py              <-- End-to-end validation (librosa MFCCs)
-|   +-- Speaker_Recognition_GMM_UBM.ipynb  <-- Full notebook with visualizations
+|   |-- train_gmm_ubm.py               <-- Train and evaluate GMM-UBM system
+|   |-- identify_speaker.py            <-- Speaker identification script
+|   |-- test_pipeline.py               <-- Python-only validation pipeline
+|   +-- Speaker_Recognition_GMM_UBM.ipynb
 ```
 
 ---
 
 ## Development Procedure
 
-The project was developed in the following sequence:
+The project was developed step by step, starting from MFCC theory and ending with the final speaker recognition system.
 
 ### Step 1 -- Study MFCC Theory
 
-Researched the mathematics behind Mel-Frequency Cepstral Coefficients: the mel scale, filterbank design, the Discrete Cosine Transform, and the motivation for delta and delta-delta features. This groundwork is captured in the `MFCC/Learn_MFCC.ipynb` and `MFCC/MFCC.ipynb` notebooks, along with the reference PDFs.
+First, the mathematical background of MFCC was studied. This included:
 
-### Step 2 -- Implement MFCC from Scratch in MATLAB
+- speech signal preprocessing,
+- pre-emphasis,
+- frame blocking,
+- windowing,
+- FFT and power spectrum,
+- mel scale conversion,
+- triangular mel filterbanks,
+- logarithmic compression,
+- DCT,
+- delta and delta-delta features.
 
-Built each processing stage as a standalone MATLAB function in the `Final/` directory:
-
-| Step | Function | Operation |
-|------|----------|-----------|
-| 1 | `preemphasis.m` | First-order high-pass filter: `y[n] = x[n] - alpha * x[n-1]`, alpha = 0.97 |
-| 2 | `frame_signal.m` | Divide the signal into overlapping frames (256 samples, hop 100) |
-| 3 | `apply_window.m` | Apply a Hamming window to each frame |
-| 4-5 | `compute_power_spectrum.m` | 512-point FFT followed by power spectrum computation |
-| 6 | `apply_mel_filterbank.m` | Apply a 26-filter mel-spaced triangular filterbank |
-| 7 | `apply_log.m` | Take the natural logarithm of mel energies |
-| 8 | `apply_dct.m` | Discrete Cosine Transform, keeping the first 13 coefficients |
-| 9 | `compute_delta.m` | Compute first-order (delta) and second-order (delta-delta) differences |
-
-The output per frame is a 39-dimensional vector: 13 MFCCs + 13 deltas + 13 delta-deltas.
-
-### Step 3 -- Validate the MATLAB Pipeline
-
-Used the `Final/Final_assemble.mlx` Live Script to visually verify each intermediate result -- spectrograms, mel filterbank shapes, MFCC heatmaps, and delta patterns -- against known references.
-
-**Note:** The `MFCC/matlab/` folder contains early prototypes and learning materials and is excluded from the repository. The production MATLAB implementation resides in `Final/`.
-
-### Step 4 -- Record and Organize Speaker Data
-
-Collected eight speakers (s1 through s8) with separate training and test recordings. All recordings are stored as `.wav` files under `Final/data/train/` and `Final/data/test/`.
-
-### Step 5 -- Batch Export Features to .mat
-
-Created `export_mfcc_features.m` to process every `.wav` file through the step-by-step MFCC pipeline (the same functions used in the Live Script, not the `mfcc()` wrapper). All audio is truncated to the shortest recording length to guarantee uniform frame counts. The exported `.mat` files contain `mfcc_coeffs`, `delta_mfcc`, `delta2_mfcc`, and `features`, all in MATLAB's native (coefficients x frames) orientation.
-
-### Step 6 -- Choose a Speaker Modelling Approach
-
-Evaluated three candidate architectures:
-
-| Approach | Verdict |
-|----------|---------|
-| GMM-UBM with MAP adaptation | Selected. Well-suited for small-dataset closed-set identification; no deep-learning overhead. |
-| Simple vector-space (cosine similarity on mean MFCC) | Too coarse; ignores temporal variation within an utterance. |
-| Deep speaker embeddings (d-vector / x-vector) | Requires far more data than eight speakers provide. |
-
-### Step 7 -- Build the Python GMM-UBM Pipeline
-
-Implemented `train_gmm_ubm.py` with:
-
-- A `Config` class centralizing all hyperparameters.
-- A data loader that transposes MATLAB's (39 x N) matrices to Python's (N x 39) convention and horizontally stacks the three coefficient sets into (N x 39).
-- A `GMMUBMSystem` class encapsulating UBM training (sklearn `GaussianMixture`), MAP adaptation (mean and weight update with configurable relevance factor), scoring (log-likelihood ratio against the UBM), and identification (softmax over scores).
-- Model serialization to `trained_models/gmm_ubm_model.pkl`.
-
-### Step 8 -- Build the Inference Script
-
-Created `identify_speaker.py`, which loads the saved model and accepts three input modes:
-
-- `--audio <file.wav>`: extract MFCCs via librosa and identify.
-- `--mat <file.mat>`: load pre-extracted MATLAB features and identify.
-- `--record --duration N`: record N seconds from the microphone, extract MFCCs, and identify.
-
-### Step 9 -- Build the Validation Test
-
-Created `test_pipeline.py`, which runs the full train-evaluate cycle from raw `.wav` files using librosa-based MFCC extraction. This serves as a self-contained sanity check that does not depend on MATLAB at all.
-
-### Step 10 -- Debug Data-Orientation Mismatch
-
-When the MATLAB-exported `.mat` files were first loaded in Python, the system produced incorrect results because MATLAB stores matrices as (coefficients x frames) while the Python code expected (frames x features). The loader was corrected to transpose each of the three coefficient matrices individually and then concatenate horizontally.
-
-### Step 11 -- Create the Jupyter Notebook with Visualizations
-
-Converted the training pipeline into `Speaker_Recognition_GMM_UBM.ipynb`, a 19-section notebook containing:
-
-- Data loading and summary tables
-- Frames-per-speaker bar charts
-- MFCC feature heatmaps for sample speakers
-- KDE plots of selected coefficients per speaker
-- PCA scatter plots of the 39-dim feature space
-- UBM component visualization in PCA space
-- MAP adaptation magnitude heatmaps
-- Adaptation coefficient (alpha) bar charts
-- Score matrix heatmap (log-likelihood ratios)
-- Confusion matrices (counts and percentages)
-- Confidence heatmap (softmax probabilities)
-- Genuine vs. impostor score distributions with EER computation
-- ROC curve with AUC
-- Single-utterance identification demo (from `.mat`)
-- Audio-based identification demo (from `.wav` via librosa)
-- Model save/load verification
-- Hyperparameter grid search over UBM components and MAP relevance factor
+The theory exploration is included in the `MFCC/` folder through notebooks and reference documents.
 
 ---
 
-## Phase 1 -- MFCC Feature Extraction (MATLAB)
+### Step 2 -- Implement MFCC from Scratch in MATLAB
 
-All production MATLAB code resides in the `Final/` directory.
+Each part of the MFCC pipeline was implemented as a separate MATLAB function.
 
-### Parameters
+| Step | MATLAB File | Purpose |
+|------|-------------|---------|
+| 1 | `preemphasis.m` | Applies the high-pass pre-emphasis filter |
+| 2 | `frame_signal.m` | Splits the audio signal into overlapping frames |
+| 3 | `apply_window.m` | Applies a Hamming window to each frame |
+| 4 | `compute_power_spectrum.m` | Computes FFT and power spectrum |
+| 5 | `melfb.m` | Creates the mel filterbank matrix |
+| 6 | `apply_mel_filterbank.m` | Applies the mel filters to the power spectrum |
+| 7 | `apply_log.m` | Applies logarithmic compression |
+| 8 | `apply_dct.m` | Applies DCT and keeps 13 MFCC coefficients |
+| 9 | `compute_delta.m` | Computes delta and delta-delta features |
+
+The final output of the MATLAB pipeline is:
+
+```text
+features = 39 × M
+```
+
+where each column corresponds to one frame.
+
+---
+
+### Step 3 -- Validate the MATLAB Pipeline
+
+The file `Final_assemble.mlx` was created to visualize the full MATLAB MFCC process.
+
+It includes plots for:
+
+- raw audio waveform,
+- pre-emphasized waveform,
+- original and windowed frames,
+- power spectrum,
+- mel filterbank,
+- mel energies,
+- log-mel energies,
+- MFCC heatmap,
+- delta MFCC heatmap,
+- delta-delta MFCC heatmap,
+- final 39-dimensional feature matrix.
+
+This helped verify that every stage of the MFCC pipeline was working correctly.
+
+---
+
+### Step 4 -- Organize Speaker Data
+
+The dataset contains 8 speakers:
+
+```text
+s1, s2, s3, s4, s5, s6, s7, s8
+```
+
+Each speaker has:
+
+```text
+1 training recording
+1 test recording
+```
+
+The files are organized as:
+
+```text
+Final/data/train/
+Final/data/test/
+```
+
+---
+
+### Step 5 -- Export Features to .mat Files
+
+The MATLAB script `export_mfcc_features.m` processes all `.wav` files in the train and test folders.
+
+It performs the following operations:
+
+1. Reads all training and test `.wav` files.
+2. Finds the shortest recording.
+3. Truncates all recordings to the same length.
+4. Extracts MFCC, delta, and delta-delta features.
+5. Saves the features as `.mat` files.
+6. Saves metadata such as feature dimension, sampling frequency, and MFCC parameters.
+
+Each exported `.mat` file contains:
+
+```text
+mfcc_coeffs   = 13 × M
+delta_mfcc    = 13 × M
+delta2_mfcc   = 13 × M
+features      = 39 × M
+speaker_id
+fs
+```
+
+---
+
+### Step 6 -- Choose the Speaker Recognition Model
+
+Three modelling approaches were considered.
+
+| Approach | Decision |
+|----------|----------|
+| Mean MFCC with cosine similarity | Too simple and loses frame-level variation |
+| Deep speaker embeddings | Not suitable for this small dataset |
+| GMM-UBM with MAP adaptation | Selected |
+
+GMM-UBM was selected because it works well with small speaker datasets and MFCC features. It is also a classical and interpretable approach for speaker recognition.
+
+---
+
+### Step 7 -- Build the Python GMM-UBM Pipeline
+
+The Python training script `train_gmm_ubm.py` was developed to:
+
+- load MATLAB-exported `.mat` features,
+- convert the feature shape from `39 × M` to `M × 39`,
+- scale the features,
+- train a Universal Background Model,
+- adapt one GMM model for each speaker,
+- evaluate the test speakers,
+- save the trained model.
+
+The trained model is saved as:
+
+```text
+Final/trained_models/gmm_ubm_model.pkl
+```
+
+---
+
+### Step 8 -- Build the Speaker Identification Script
+
+The script `identify_speaker.py` was created for inference.
+
+It supports three input modes:
+
+```text
+1. Identify from a .wav file
+2. Identify from a MATLAB .mat feature file
+3. Record from microphone and identify
+```
+
+This makes the system usable both for testing and for simple real-time demonstrations.
+
+---
+
+### Step 9 -- Build the Python-Only Test Pipeline
+
+The file `test_pipeline.py` runs a complete Python-only version of the system.
+
+It:
+
+- loads raw `.wav` files,
+- extracts MFCC features using `librosa`,
+- trains the GMM-UBM model,
+- evaluates speaker recognition accuracy,
+- saves the model.
+
+This is useful because it verifies the speaker recognition part without depending on MATLAB.
+
+---
+
+### Step 10 -- Fix MATLAB-to-Python Orientation
+
+One important issue was the difference between MATLAB and Python feature orientation.
+
+MATLAB exports features as:
+
+```text
+39 × M
+```
+
+where columns are frames.
+
+Python expects:
+
+```text
+M × 39
+```
+
+where rows are samples and columns are feature dimensions.
+
+Therefore, the Python loader transposes the MATLAB matrices before training.
+
+---
+
+### Step 11 -- Create the Jupyter Notebook
+
+The notebook `Speaker_Recognition_GMM_UBM.ipynb` was created to explain and visualize the full speaker recognition system.
+
+It includes:
+
+- data loading summary,
+- feature shape verification,
+- MFCC heatmaps,
+- delta and delta-delta visualizations,
+- PCA plots,
+- UBM component visualization,
+- MAP adaptation analysis,
+- score matrix,
+- confusion matrix,
+- confidence heatmap,
+- ROC curve,
+- EER calculation,
+- single utterance identification demo,
+- audio-based identification demo,
+- model save/load verification,
+- hyperparameter grid search.
+
+---
+
+## Phase 1 -- MFCC Feature Extraction in MATLAB
+
+All final MATLAB files are stored in the `Final/` directory.
+
+### MFCC Parameters
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | `alpha` | 0.97 | Pre-emphasis coefficient |
-| `frame_length` | 256 | Samples per frame |
-| `hop_size` | 100 | Samples between frame starts (60.9% overlap) |
+| `frame_length` | 256 | Number of samples per frame |
+| `hop_size` | 100 | Number of samples between adjacent frames |
 | `nfft` | 512 | FFT size |
-| `num_filters` | 26 | Number of mel filterbank channels |
-| `num_coeffs` | 13 | Number of MFCC coefficients retained |
+| `num_filters` | 26 | Number of mel filters |
+| `num_coeffs` | 13 | Number of MFCC coefficients |
+| `delta_N` | 2 | Delta calculation window |
 | Output dimension | 39 | 13 MFCC + 13 delta + 13 delta-delta |
 
-### Pipeline Equation Summary
+### Main Equations
 
 Pre-emphasis:
 
-```
-y[n] = x[n] - 0.97 * x[n-1]
+```text
+y[n] = x[n] - 0.97x[n-1]
 ```
 
-Mel scale conversion:
+Frame blocking:
 
-```
-mel(f) = 2595 * log10(1 + f / 700)
+```text
+x_m[n] = x[n + mS]
 ```
 
 Power spectrum:
 
-```
-P[k] = (1 / N) * |FFT(frame)|^2
-```
-
-MFCC (via DCT-II):
-
-```
-c[n] = sum_k( log(mel_energy[k]) * cos(n * (k - 0.5) * pi / K) )
+```text
+P[k] = |X[k]|^2 / N
 ```
 
-Delta (first-order finite difference):
+Mel scale:
 
+```text
+mel(f) = 2595 log10(1 + f / 700)
 ```
-d[t] = ( sum_{n=1}^{N} n * (c[t+n] - c[t-n]) ) / ( 2 * sum_{n=1}^{N} n^2 )
+
+Log-mel energy:
+
+```text
+E_log = log(E + epsilon)
+```
+
+DCT:
+
+```text
+c[n] = sum_k E_log[k] cos(pi n (2k + 1) / 2K)
+```
+
+Delta:
+
+```text
+delta[t] = sum_n n(c[t+n] - c[t-n]) / (2 sum_n n^2)
 ```
 
 ---
 
 ## Phase 2 -- Feature Export
 
-Run in MATLAB from the `Final/` directory:
+Run the following command in MATLAB from the `Final/` directory:
 
 ```matlab
->> export_mfcc_features
+export_mfcc_features
 ```
 
-This script:
+This creates:
 
-1. Scans all `.wav` files in `data/train/` and `data/test/` to find the shortest recording.
-2. Truncates every recording to that length so all speakers produce the same number of frames.
-3. Processes each file through the full step-by-step MFCC pipeline (the same individual function calls used in the Live Script).
-4. Saves per-speaker `.mat` files into `exported_features/train/` and `exported_features/test/`.
-5. Writes a `metadata.mat` file recording all parameters.
+```text
+Final/exported_features/
+|-- train/
+|   |-- s1_mfcc.mat
+|   |-- s2_mfcc.mat
+|   +-- ...
+|
+|-- test/
+|   |-- s1_mfcc.mat
+|   |-- s2_mfcc.mat
+|   +-- ...
+|
++-- metadata.mat
+```
+
+The exported features are stored in MATLAB orientation:
+
+```text
+features = 39 × M
+```
+
+This orientation is kept intentionally during MATLAB processing and converted only after loading into Python.
 
 ---
 
-## Phase 3 -- GMM-UBM Speaker Recognition (Python)
+## Phase 3 -- GMM-UBM Speaker Recognition in Python
 
-### Why GMM-UBM
+### Why GMM-UBM?
 
-The Gaussian Mixture Model -- Universal Background Model is the standard generative approach for speaker recognition when training data is limited. Instead of training an independent GMM for each speaker (which would overfit on approximately 130 frames), the system:
+GMM-UBM is a suitable method for this project because the dataset is small.
 
-1. Trains a single UBM on all pooled training data, capturing the general structure of speech.
-2. Adapts the UBM to each speaker using Maximum A Posteriori (MAP) estimation, which shifts only the relevant means and weights while inheriting robust covariance estimates from the UBM.
+Instead of training a completely independent model for each speaker, the system first trains a general speech model called the Universal Background Model. Then this model is adapted to each speaker.
+
+This helps reduce overfitting and gives better speaker models when limited data is available.
+
+---
+
+### Universal Background Model
+
+The UBM is trained using all training speakers together.
+
+If the training feature vectors are:
+
+```text
+X = {x1, x2, ..., xT}
+```
+
+the UBM models the general distribution of speech features using a Gaussian Mixture Model:
+
+```text
+P(x | UBM) = sum_k w_k N(x | mu_k, Sigma_k)
+```
+
+where:
+
+```text
+w_k      = mixture weight
+mu_k     = Gaussian mean
+Sigma_k  = covariance matrix
+```
+
+---
 
 ### MAP Adaptation
 
-For each Gaussian component _k_ in the UBM:
+Each speaker model is created by adapting the UBM using that speaker's training features.
 
-```
+For Gaussian component `k`:
+
+```text
 alpha_k = n_k / (n_k + r)
+```
+
+where:
+
+```text
+n_k = soft count of frames assigned to component k
+r   = relevance factor
+```
+
+The adapted mean is:
+
+```text
 adapted_mean_k = alpha_k * speaker_mean_k + (1 - alpha_k) * ubm_mean_k
 ```
 
-where `n_k` is the soft count of frames assigned to component _k_, and `r` is the relevance factor (default 16). A higher relevance factor keeps the adapted model closer to the UBM; a lower value gives more weight to the speaker's data.
+A larger relevance factor keeps the adapted model closer to the UBM.  
+A smaller relevance factor allows stronger adaptation to the speaker data.
+
+---
 
 ### Scoring
 
-For a test utterance _X_:
+For a test utterance `X`, the score for each speaker is calculated as:
 
-```
+```text
 score(X, speaker) = log P(X | speaker_GMM) - log P(X | UBM)
 ```
 
-The predicted speaker is the one with the highest score. Confidence is computed by applying softmax across all speaker scores.
+The speaker with the highest score is selected:
+
+```text
+predicted speaker = argmax(score)
+```
+
+Confidence is calculated using softmax over the speaker scores.
 
 ---
 
 ## Phase 4 -- Jupyter Notebook with Visualizations
 
-`Final/Speaker_Recognition_GMM_UBM.ipynb` reproduces the entire training and evaluation pipeline in an interactive notebook with 19 sections of code and commentary, plus comprehensive plots covering data exploration, model internals, and performance metrics. The final section performs a grid search over UBM component counts (8, 16, 32, 64) and MAP relevance factors (4, 8, 16, 32).
+The notebook:
+
+```text
+Final/Speaker_Recognition_GMM_UBM.ipynb
+```
+
+contains the full speaker recognition pipeline with visual explanations.
+
+It includes:
+
+- dataset summary,
+- MFCC feature visualization,
+- feature distribution plots,
+- PCA projection,
+- UBM visualization,
+- MAP adaptation visualization,
+- score matrix,
+- confusion matrix,
+- ROC curve,
+- EER calculation,
+- hyperparameter search.
 
 ---
 
@@ -325,127 +613,201 @@ The predicted speaker is the one with the highest score. Confidence is computed 
 
 ### Prerequisites
 
-- MATLAB R2020a or later (for MFCC extraction and export)
-- Python 3.10+ with the packages listed in [Dependencies](#dependencies)
-- Audio recordings placed in `Final/data/train/` and `Final/data/test/`
+Install MATLAB and Python before running the full system.
 
-### Full Pipeline (MATLAB + Python)
+Recommended setup:
 
-```bash
-# 1. In MATLAB, navigate to Final/ and run:
->> export_mfcc_features
-
-# 2. In a terminal, navigate to Final/ and run:
-cd Final
-python train_gmm_ubm.py
+```text
+MATLAB R2020a or later
+Python 3.10 or later
 ```
 
-### Python-Only Pipeline (no MATLAB required)
+The audio files should be placed in:
 
-```bash
-cd Final
-python test_pipeline.py
+```text
+Final/data/train/
+Final/data/test/
 ```
-
-This extracts MFCCs from `.wav` files directly using `librosa`, trains the GMM-UBM, evaluates on the test set, and saves the trained model.
-
-### Interactive Notebook
-
-Open `Final/Speaker_Recognition_GMM_UBM.ipynb` in VS Code or Jupyter and run all cells. The notebook loads the MATLAB-exported `.mat` files, trains the system, and produces all visualizations.
 
 ---
 
-## Usage Guide -- Command-Line Scripts
+### Full Pipeline: MATLAB + Python
 
-### train_gmm_ubm.py
+Step 1: Run MATLAB feature export.
 
-Train the GMM-UBM system from MATLAB-exported `.mat` features and evaluate on the test set.
+```matlab
+cd Final
+export_mfcc_features
+```
+
+Step 2: Train and evaluate the Python GMM-UBM system.
 
 ```bash
 cd Final
-
-# Train with default settings (16 components, relevance 16):
 python train_gmm_ubm.py
-
-# Train with custom hyperparameters:
-python train_gmm_ubm.py --components 32 --relevance 8
-
-# Evaluate only (load previously saved model):
-python train_gmm_ubm.py --evaluate
 ```
 
-Output: per-speaker predictions with confidence, overall accuracy, and a score matrix. The trained model is saved to `trained_models/gmm_ubm_model.pkl`.
+---
 
-### identify_speaker.py
+### Python-Only Pipeline
 
-Identify who is speaking in a new recording. Requires a trained model (run `train_gmm_ubm.py` or `test_pipeline.py` first).
-
-```bash
-cd Final
-
-# Identify from a .wav file:
-python identify_speaker.py --audio data/test/s3.wav
-
-# Identify from a MATLAB .mat feature file:
-python identify_speaker.py --mat exported_features/test/s3_mfcc.mat
-
-# Record from the microphone for 3 seconds and identify:
-python identify_speaker.py --record --duration 3
-
-# Record for 5 seconds using a specific sampling rate:
-python identify_speaker.py --record --duration 5 --sr 12500
-```
-
-Output: predicted speaker, confidence percentage, and a ranked list of all speakers with their scores.
-
-### test_pipeline.py
-
-Run the full pipeline from raw `.wav` files without any MATLAB involvement. This is useful for quick validation.
+This version does not use MATLAB-exported `.mat` files. It extracts MFCC features directly from `.wav` files using `librosa`.
 
 ```bash
 cd Final
 python test_pipeline.py
 ```
 
-The script loads `.wav` files from `data/train/` and `data/test/`, extracts 39-dim MFCC features using `librosa`, trains the UBM, adapts per speaker, evaluates, and prints results. It also saves the trained model so that `identify_speaker.py` can use it.
+---
 
-**Important:** All three scripts must be run from the `Final/` directory so that relative paths to `data/`, `exported_features/`, and `trained_models/` resolve correctly.
+### Interactive Notebook
+
+Open the notebook:
+
+```text
+Final/Speaker_Recognition_GMM_UBM.ipynb
+```
+
+Then run all cells.
+
+---
+
+## Usage Guide
+
+### train_gmm_ubm.py
+
+Train and evaluate the GMM-UBM model using MATLAB-exported features.
+
+```bash
+cd Final
+python train_gmm_ubm.py
+```
+
+Train with custom hyperparameters:
+
+```bash
+python train_gmm_ubm.py --components 32 --relevance 8
+```
+
+Evaluate using a previously saved model:
+
+```bash
+python train_gmm_ubm.py --evaluate
+```
+
+The trained model is saved to:
+
+```text
+Final/trained_models/gmm_ubm_model.pkl
+```
+
+---
+
+### identify_speaker.py
+
+Identify a speaker from a new input.
+
+Identify from a `.wav` file:
+
+```bash
+cd Final
+python identify_speaker.py --audio data/test/s3.wav
+```
+
+Identify from a MATLAB `.mat` feature file:
+
+```bash
+python identify_speaker.py --mat exported_features/test/s3_mfcc.mat
+```
+
+Record from microphone and identify:
+
+```bash
+python identify_speaker.py --record --duration 3
+```
+
+Record with a specific sampling rate:
+
+```bash
+python identify_speaker.py --record --duration 5 --sr 12500
+```
+
+The output includes:
+
+- predicted speaker,
+- confidence percentage,
+- ranked speaker scores.
+
+---
+
+### test_pipeline.py
+
+Run the full Python-only pipeline from raw `.wav` files:
+
+```bash
+cd Final
+python test_pipeline.py
+```
+
+This script:
+
+- loads training and test `.wav` files,
+- extracts MFCC features using `librosa`,
+- trains the GMM-UBM system,
+- evaluates the system,
+- saves the trained model.
 
 ---
 
 ## Technical Details
 
-### Hyperparameters
+### Python Hyperparameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `UBM_N_COMPONENTS` | 16 | Number of Gaussian components in the UBM |
-| `COVARIANCE_TYPE` | `diag` | Diagonal covariance (standard for speaker recognition) |
-| `MAP_RELEVANCE_FACTOR` | 16.0 | Controls adaptation strength |
+| `COVARIANCE_TYPE` | `diag` | Diagonal covariance matrix |
+| `MAP_RELEVANCE_FACTOR` | 16.0 | Controls MAP adaptation strength |
 | `MAP_ADAPT_MEANS` | True | Adapt Gaussian means |
 | `MAP_ADAPT_WEIGHTS` | True | Adapt mixture weights |
-| `MAP_ADAPT_COVARS` | False | Do not adapt covariances (insufficient data) |
-| `USE_FEATURE_SCALING` | True | Zero-mean, unit-variance normalization |
+| `MAP_ADAPT_COVARS` | False | Keep UBM covariances fixed |
+| `USE_FEATURE_SCALING` | True | Apply zero-mean, unit-variance scaling |
 
-### Data
+---
+
+### Data Summary
 
 | Property | Value |
 |----------|-------|
-| Number of speakers | 8 (s1 through s8) |
-| Recordings per speaker | 1 training + 1 test |
+| Number of speakers | 8 |
+| Speaker labels | `s1` to `s8` |
+| Training recordings | 1 per speaker |
+| Test recordings | 1 per speaker |
 | Sampling frequency | 12500 Hz |
-| Approximate duration | 1 -- 1.5 seconds per recording |
-| Frames per speaker | Approximately 130 (train) and 150 (test) |
+| Approximate duration | 1 to 1.5 seconds |
+| MATLAB feature shape | `39 × M` |
+| Python feature shape | `M × 39` |
+
+---
 
 ### MATLAB-to-Python Data Handling
 
-MATLAB saves matrices in column-major order. The MFCC export produces:
+MATLAB saves the extracted features as:
 
-- `mfcc_coeffs`: shape (13 x num_frames)
-- `delta_mfcc`: shape (13 x num_frames)
-- `delta2_mfcc`: shape (13 x num_frames)
+```text
+mfcc_coeffs   = 13 × M
+delta_mfcc    = 13 × M
+delta2_mfcc   = 13 × M
+features      = 39 × M
+```
 
-The Python loader transposes each matrix to (num_frames x 13) and horizontally stacks them into a single (num_frames x 39) array.
+Python loads the `.mat` files and converts them to:
+
+```text
+features = M × 39
+```
+
+This is necessary because scikit-learn expects each row to be one sample or frame.
 
 ---
 
@@ -453,18 +815,43 @@ The Python loader transposes each matrix to (num_frames x 13) and horizontally s
 
 ### Identification Accuracy
 
+On the current 8-speaker dataset, the system achieved:
+
 | Evaluation Method | Accuracy |
 |-------------------|----------|
-| MATLAB-exported features (train_gmm_ubm.py) | 100% (8/8) |
-| Librosa-extracted features (test_pipeline.py) | 100% (8/8) |
+| MATLAB-exported features | 100% |
+| Python `librosa` features | 100% |
+
+This confirms that the complete pipeline works correctly on the current dataset.
+
+However, the dataset is small, so this result should be understood as a successful project-level validation rather than a production-level benchmark. For a stronger evaluation, the dataset should include more speakers, more recordings per speaker, different microphones, background noise, and different recording conditions.
+
+---
 
 ### Hyperparameter Grid Search
 
-Tested all combinations of UBM components in {8, 16, 32, 64} and MAP relevance factor in {4, 8, 16, 32}. Nearly all configurations achieved 100% accuracy, with only the (16 components, relevance 4) and (16 components, relevance 8) settings dropping to 87.5%. This indicates the system is robust across a wide range of hyperparameters for this dataset.
+The notebook includes a grid search over:
 
-### Equal Error Rate
+```text
+UBM components: 8, 16, 32, 64
+MAP relevance factor: 4, 8, 16, 32
+```
 
-The EER and AUC are computed in the Jupyter notebook from genuine (diagonal) and impostor (off-diagonal) score distributions, with ROC curves plotted for visual assessment.
+Most tested configurations achieved good results. This suggests that the MFCC features are separable enough for the current dataset.
+
+---
+
+### EER and ROC
+
+The notebook also computes:
+
+- genuine scores,
+- impostor scores,
+- ROC curve,
+- AUC,
+- Equal Error Rate.
+
+These are useful for understanding the recognition system beyond simple accuracy.
 
 ---
 
@@ -472,21 +859,32 @@ The EER and AUC are computed in the Jupyter notebook from genuine (diagonal) and
 
 ### MATLAB
 
-- Signal Processing Toolbox (for `audioread`)
+MATLAB is used for the from-scratch MFCC extraction and feature export.
+
+Required MATLAB functions include:
+
+- `audioread`
+- `fft`
+- `hamming`
+- `dct`
+
+Depending on the MATLAB version, `hamming` and `dct` may require additional toolboxes such as the Signal Processing Toolbox.
+
+---
 
 ### Python
 
 | Package | Purpose |
 |---------|---------|
-| `numpy` | Numerical operations |
-| `scipy` | Loading `.mat` files |
-| `scikit-learn` | `GaussianMixture`, `StandardScaler`, `PCA`, metrics |
+| `numpy` | Numerical computation |
+| `scipy` | Loading MATLAB `.mat` files |
+| `scikit-learn` | Gaussian Mixture Models, scaling, PCA, metrics |
 | `matplotlib` | Plotting |
-| `seaborn` | Statistical visualizations |
-| `librosa` | Python-based MFCC extraction and audio loading |
-| `sounddevice` | Microphone recording (optional, for `--record` mode) |
+| `seaborn` | Statistical visualization |
+| `librosa` | Audio loading and MFCC extraction |
+| `sounddevice` | Microphone recording |
 
-Install all Python dependencies:
+Install the dependencies using:
 
 ```bash
 pip install numpy scipy scikit-learn matplotlib seaborn librosa sounddevice
@@ -494,8 +892,29 @@ pip install numpy scipy scikit-learn matplotlib seaborn librosa sounddevice
 
 ---
 
+## Important Notes
+
+- This system is currently designed for closed-set speaker identification.
+- Closed-set means the test speaker must be one of the enrolled speakers.
+- MATLAB stores features as `39 × M`.
+- Python uses features as `M × 39`.
+- The MATLAB MFCC pipeline and the `librosa` MFCC pipeline may not give exactly identical numerical values.
+- The current dataset is small, so the result should not be treated as a large-scale benchmark.
+- For real-world use, the system should be tested with more speakers and more recording conditions.
+
+---
+
 ## References
 
-- D. A. Reynolds, T. F. Quatieri, and R. B. Dunn, "Speaker Verification Using Adapted Gaussian Mixture Models," _Digital Signal Processing_, vol. 10, no. 1-3, pp. 19--41, 2000.
-- S. B. Davis and P. Mermelstein, "Comparison of Parametric Representations for Monosyllabic Word Recognition in Continuously Spoken Sentences," _IEEE Transactions on Acoustics, Speech, and Signal Processing_, vol. 28, no. 4, pp. 357--366, 1980.
-- J.-L. Gauvain and C.-H. Lee, "Maximum a Posteriori Estimation for Multivariate Gaussian Mixture Observations of Markov Chains," _IEEE Transactions on Speech and Audio Processing_, vol. 2, no. 2, pp. 291--298, 1994.
+1. D. A. Reynolds, T. F. Quatieri, and R. B. Dunn,  
+   “Speaker Verification Using Adapted Gaussian Mixture Models,”  
+   Digital Signal Processing, vol. 10, no. 1–3, pp. 19–41, 2000.
+
+2. S. B. Davis and P. Mermelstein,  
+   “Comparison of Parametric Representations for Monosyllabic Word Recognition in Continuously Spoken Sentences,”  
+   IEEE Transactions on Acoustics, Speech, and Signal Processing, vol. 28, no. 4, pp. 357–366, 1980.
+
+3. J.-L. Gauvain and C.-H. Lee,  
+   “Maximum a Posteriori Estimation for Multivariate Gaussian Mixture Observations of Markov Chains,”  
+   IEEE Transactions on Speech and Audio Processing, vol. 2, no. 2, pp. 291–298, 1994.
+```
