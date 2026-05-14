@@ -3,8 +3,8 @@
 
 # Ignore all Jupyter Notebooks in this project
 *.ipynb
-# But do NOT ignore the MFCC notebook
-!MFCC/MFCC.ipynb
+# ignore the MFCC
+MFCC/
 !Final/Speaker_Recognition_GMM_UBM.ipynb
 
 # But keep README and other files
